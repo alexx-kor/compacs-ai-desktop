@@ -1,0 +1,39 @@
+COMPACS RAG Desktop — быстрый старт
+====================================
+
+1. Распакуйте архив в любую папку (например D:\COMPACS-RAG).
+2. Дважды щёлкните START.cmd (или сразу main.exe).
+3. Откроется окно COMPACS RAG — задайте вопрос там. Браузер не нужен.
+
+Все пути относительные. Python, Docker, Ollama и внешние API не требуются.
+main.exe сам поднимает модели и читает векторную базу rag/.
+
+Что лежит в папке (проверено при сборке архива):
+  main.exe
+  llama-server.exe
+  rag\vectors.bin
+  rag\chunks.bin
+  rag\texts.txt
+  rag\meta.json
+  assets\index.html
+  models\nomic-embed-text.gguf
+  models\llama3.2-3b-instruct-q4_K_M.gguf
+  START.cmd / STOP.cmd
+  COMPACS-RAG-Desktop-Документация.docx  (полная инструкция в Word)
+
+Порты:
+  13081 — чат (UI + API main.exe)
+  8081  — эмбеддинги (llama-server)
+  8082  — генерация ответа (llama-server)
+
+Совместимость со стендом: engine стенда :8080, embed десктопа :8081 — конфликта нет.
+
+Остановка: STOP.cmd
+
+Требования:
+  Windows 10/11 x64
+  WebView2 Runtime (обычно уже есть с Edge)
+  ~2.5 GB свободного места
+
+Пересборка архива на стенде:
+  python D:\compacs-desktop\pack_portable.py

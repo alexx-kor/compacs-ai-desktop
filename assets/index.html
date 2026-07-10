@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COMPACS RAG</title>
+<style>
+:root {
+  --bg: #f0f2f8;
+  --card: #fff;
+  --text: #1a1a2e;
+  --muted: #64748b;
+  --accent: #1d4ed8;
+  --border: #e2e8f0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 20px; max-width: 900px; margin-inline: auto; }
+h1 { font-size: 1.4rem; margin: 0 0 4px; }
+.status { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+.status.ok { color: #15803d; }
+.status.err { color: #dc2626; }
+.card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+label { display: block; font-weight: 600; margin-top: 8px; font-size: 14px; }
+textarea {
+  width: 100%;
+  margin: 8px 0 12px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font: inherit;
+  resize: vertical;
+}
+button {
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled { opacity: .55; cursor: not-allowed; }
+#answer {
+  margin-top: 16px;
+  min-height: 120px;
+  white-space: pre-wrap;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.muted { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<h1>COMPACS RAG</h1>
+<div id="health" class="status">Загрузка…</div>
+<div class="card">
+  <p class="muted">Офлайн RAG: векторная база rag/ + локальные модели. Без внешних API.</p>
+  <label for="question">Вопрос</label>
+  <textarea id="question" rows="4" placeholder="Задайте вопрос по документации…"></textarea>
+  <button type="button" id="ask">Спросить</button>
+  <div id="answer">Ответ появится здесь.</div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+let answer = "";
+let sources = [];
+
+function rpcJson(value) {
+  if (value == null) return null;
+  if (typeof value === "object") return value;
+  if (typeof value === "string") return value ? JSON.parse(value) : null;
+  return value;
+}
+
+window.compacsOnEvent = function(ev) {
+  if (typeof ev === "string") ev = JSON.parse(ev);
+  const answerEl = $("answer");
+  if (ev.type === "status") {
+    if (ev.phase === "retrieval") answerEl.textContent = "Поиск в индексе…";
+    if (ev.phase === "generation") answerEl.textContent = "Генерация ответа…";
+  }
+  if (ev.type === "token") {
+    answer += ev.text || "";
+    answerEl.textContent = answer;
+  }
+  if (ev.type === "done") {
+    answer = ev.answer || answer;
+    sources = ev.sources || [];
+    const srcText = sources.map(s => "- " + s.source + ", стр. " + s.page).join("\n");
+    answerEl.textContent = answer + (srcText ? "\n\nИсточники:\n" + srcText : "");
+    if (ev.error) {
+      answerEl.textContent = "Ошибка: " + ev.error;
+    }
+  }
+};
+
+async function checkHealth() {
+  const el = $("health");
+  if (typeof window.compacsGetInfo !== "function") {
+    el.textContent = "Загрузка приложения…";
+    el.className = "status";
+    return false;
+  }
+  try {
+    const data = rpcJson(await window.compacsGetInfo());
+    if (data.status === "ok") {
+      el.textContent = "Готово | чанков в базе: " + (data.chunks ?? "?");
+      el.className = "status ok";
+      return true;
+    }
+    el.textContent = "Ошибка загрузки";
+    el.className = "status err";
+  } catch (_) {
+    el.textContent = "Ошибка связи с приложением";
+    el.className = "status err";
+  }
+  return false;
+}
+
+(async function waitReady() {
+  for (let i = 0; i < 60; i++) {
+    if (await checkHealth()) return;
+    await new Promise(r => setTimeout(r, 500));
+  }
+  $("health").textContent = "Не удалось подключиться. Закройте и снова запустите main.exe.";
+  $("health").className = "status err";
+})();
+
+$("ask").onclick = async () => {
+  const question = $("question").value.trim();
+  if (!question) return;
+  if (typeof window.compacsAsk !== "function") {
+    $("answer").textContent = "Подождите, приложение ещё загружается…";
+    return;
+  }
+  const answerEl = $("answer");
+  const btn = $("ask");
+  btn.disabled = true;
+  answer = "";
+  sources = [];
+  answerEl.textContent = "Обработка…";
+  try {
+    const result = rpcJson(await window.compacsAsk(question));
+    if (result.error) {
+      answerEl.textContent = "Ошибка: " + result.error;
+    }
+  } catch (err) {
+    answerEl.textContent = "Ошибка: " + err;
+  } finally {
+    btn.disabled = false;
+  }
+};
+</script>
+</body>
+</html>

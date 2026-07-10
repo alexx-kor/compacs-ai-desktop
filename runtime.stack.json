@@ -1,0 +1,33 @@
+{
+  "schema": "compacs-rag-desktop-portable/1",
+  "title": "COMPACS RAG Desktop — portable runtime",
+  "description": "Самодостаточный стек: main.exe + rag/ + llama-server + модели. Без Python и без Ollama.",
+
+  "layout": {
+    "root": ".",
+    "tree": [
+      "main.exe",
+      "llama-server.exe",
+      "START.cmd",
+      "STOP.cmd",
+      "assets/index.html",
+      "rag/vectors.bin",
+      "rag/chunks.bin",
+      "rag/texts.txt",
+      "rag/meta.json",
+      "models/nomic-embed-text.gguf",
+      "models/llama3.2-3b-instruct-q4_K_M.gguf"
+    ]
+  },
+
+  "services": {
+    "desktop_ui": { "port": 13081, "open": "http://127.0.0.1:13081/" },
+    "llama_embed": { "port": 8081, "model": "models/nomic-embed-text.gguf" },
+    "llama_chat": { "port": 8082, "model": "models/llama3.2-3b-instruct-q4_K_M.gguf" }
+  },
+
+  "startup": {
+    "order": ["llama_embed", "llama_chat", "main"],
+    "script": "START.cmd"
+  }
+}
