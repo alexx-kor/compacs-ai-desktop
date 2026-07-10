@@ -1,4 +1,4 @@
-# Сборка (если собираете из исходников)
+# --- Сборка ---
 build/
 .vs/
 *.user
@@ -7,35 +7,29 @@ build/
 *.ilk
 .tools/
 
-# Нативные бинарники десктопа
+# --- Бинарники и runtime (не исходники) ---
 *.exe
 *.dll
-
-# llama.cpp runtime (папка llama/ + корневой llama-server.exe)
-llama/
-llama-server.exe
-
-# Модели GGUF
-models/
 *.gguf
 
-# RAG-индекс (генерируется из chunks.json на стенде)
+llama/
+models/
 rag/
+
+# Данные индекса / экспорт со стенда
 vectors.bin
 chunks.bin
 texts.txt
-
-# Исходный экспорт со стенда (большой JSON)
 chunks.json
 
-# Логи и отладка
-embed_debug.log
-*.log
-
-# Документация Word (бинарник)
+# Документация Office (бинарник)
 *.docx
 
-# Python
+# Логи
+*.log
+embed_debug.log
+
+# Python (вспомогательные скрипты — кэш)
 __pycache__/
 *.py[cod]
 .venv/
