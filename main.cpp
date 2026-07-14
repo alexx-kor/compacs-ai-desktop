@@ -2,6 +2,7 @@
 // Build: cmake -B build && cmake --build build --config Release
 
 #include "config.hpp"
+#include "format_vectors.hpp"
 #include "httplib.h"
 #include "webview.h"
 
@@ -35,9 +36,9 @@ extern const std::size_t kVectorsSize;
 
 namespace {
 
-constexpr char kMagic[] = "COMPACS1";
-constexpr std::uint32_t kVersion = 1;
-constexpr std::size_t kDefaultDim = 768;
+using compacs::vectors::kDefaultDim;
+using compacs::vectors::kMagic;
+using compacs::vectors::kVersion;
 
 // ---------------------------------------------------------------------------
 // Minimal JSON helpers (no external deps)

@@ -50,6 +50,9 @@ add_executable(main ${SOURCES})
 
 target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
+add_executable(export_vectors tools/export_vectors/main.cpp)
+target_include_directories(export_vectors PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+
 # WebView2 SDK (required by webview.h on Windows).
 set(_webview2_search "")
 if(DEFINED ENV{COMPACS_WEBVIEW2_DIR})
