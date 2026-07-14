@@ -1,0 +1,57 @@
+# COMPACS Desktop — runtime config (env > this file > code defaults).
+# Priority: COMPACS_* env vars override YAML. No secrets — offline desktop only.
+#
+# similarity_threshold: cosine DISTANCE (1 - similarity). Keep hit if distance < threshold.
+# Same semantics as mcp-layer json_store / _similarity.py and ClickHouse cosineDistance.
+# Stand config.yml value 0.35 maps 1:1 (no conversion): distance < 0.35 ⇔ similarity > 0.65.
+# Desktop code default without YAML is still 0.7 (looser).
+
+models:
+  # reserved: not read by main.cpp, used by launcher
+  generator: models/llama3.2-3b-instruct-q4_K_M.gguf
+  embedder: models/nomic-embed-text.gguf
+  # API model id for /v1/embeddings (read by main.cpp)
+  embed_model: nomic-embed-text
+
+server:
+  host: 127.0.0.1
+  port: 8080
+  # reserved: not read by main.cpp, used by launcher
+  gen_port: 8082
+  embed_port: 8081
+  timeouts:
+    connect_sec: 5
+    completion_read_sec: 300
+    embed_read_sec: 60
+
+retrieval:
+  vector_store: vectors.bin
+  # stand-aligned (mcp-layer config.yml rag.top_k)
+  top_k: 12
+  # stand-aligned cosine distance threshold (see header comment)
+  similarity_threshold: 0.35
+  # stand-aligned (ollama.context_chunks / chunk_chars)
+  context_chunks: 3
+  chunk_chars: 350
+  query_max_chars: 2048
+
+generation:
+  temperature: 0.1
+  # stand-aligned (ollama.num_predict)
+  num_predict: 400
+  # reserved: not read by main.cpp, used by launcher (-c)
+  num_ctx: 8192
+
+prompt:
+  system: |
+    Answer ONLY from the context chunks below. If not found, reply: NOT FOUND in documentation.
+
+  not_found: NOT FOUND in documentation
+
+ui:
+  # host is fixed to 127.0.0.1 in code (not configurable)
+  port: 8765
+  title: COMPACS RAG
+  width: 1024
+  height: 720
+  assets_dir: assets

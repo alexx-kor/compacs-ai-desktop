@@ -1,0 +1,96 @@
+// COMPACS Desktop — runtime config (env > config.yaml > code defaults).
+#pragma once
+
+#include <cstddef>
+#include <filesystem>
+#include <ostream>
+#include <string>
+
+namespace compacs {
+
+enum class ConfigSource { Default, Yaml, Env };
+
+const char *to_string(ConfigSource source);
+
+struct Sourced {
+    ConfigSource source = ConfigSource::Default;
+};
+
+struct AppConfig {
+    // --- models (embed_model used by main; paths reserved for launcher) ---
+    std::string model_generator = "models/llama3.2-3b-instruct-q4_K_M.gguf";
+    std::string model_embedder = "models/nomic-embed-text.gguf";
+    std::string embed_model = "nomic-embed-text";
+    ConfigSource src_embed_model = ConfigSource::Default;
+
+    // --- server ---
+    std::string server_host = "127.0.0.1";
+    int server_port = 8080;
+    int server_gen_port = 8082;     // reserved
+    int server_embed_port = 8081;   // reserved
+    ConfigSource src_base_url = ConfigSource::Default;
+
+    int timeout_connect_sec = 5;
+    int timeout_completion_read_sec = 300;
+    int timeout_embed_read_sec = 60;
+    ConfigSource src_timeout_connect = ConfigSource::Default;
+    ConfigSource src_timeout_completion = ConfigSource::Default;
+    ConfigSource src_timeout_embed = ConfigSource::Default;
+
+    // --- retrieval (code defaults = current desktop) ---
+    std::string vector_store = "vectors.bin";
+    std::size_t top_k = 6;
+    double similarity_threshold = 0.7;  // cosine distance: keep if distance < threshold
+    std::size_t context_chunks = 6;
+    std::size_t chunk_chars = 1200;
+    std::size_t query_max_chars = 2048;
+    ConfigSource src_vector_store = ConfigSource::Default;
+    ConfigSource src_top_k = ConfigSource::Default;
+    ConfigSource src_similarity_threshold = ConfigSource::Default;
+    ConfigSource src_context_chunks = ConfigSource::Default;
+    ConfigSource src_chunk_chars = ConfigSource::Default;
+    ConfigSource src_query_max_chars = ConfigSource::Default;
+
+    // --- generation ---
+    double temperature = 0.1;
+    int num_predict = 512;
+    int num_ctx = 8192;  // reserved
+    ConfigSource src_temperature = ConfigSource::Default;
+    ConfigSource src_num_predict = ConfigSource::Default;
+
+    // --- prompt ---
+    std::string prompt_system =
+        "Answer ONLY from the context chunks below. If not found, reply: NOT FOUND in documentation.\n\n";
+    std::string prompt_not_found = "NOT FOUND in documentation";
+    ConfigSource src_prompt_system = ConfigSource::Default;
+    ConfigSource src_prompt_not_found = ConfigSource::Default;
+
+    // --- ui (host fixed 127.0.0.1) ---
+    static constexpr const char *kUiHost = "127.0.0.1";
+    int ui_port = 8765;
+    std::string ui_title = "COMPACS RAG";
+    int ui_width = 1024;
+    int ui_height = 720;
+    std::string ui_assets_dir = "assets";
+    ConfigSource src_ui_port = ConfigSource::Default;
+    ConfigSource src_ui_title = ConfigSource::Default;
+    ConfigSource src_ui_width = ConfigSource::Default;
+    ConfigSource src_ui_height = ConfigSource::Default;
+    ConfigSource src_ui_assets_dir = ConfigSource::Default;
+
+    std::string llama_base_url() const {
+        return "http://" + server_host + ":" + std::to_string(server_port);
+    }
+
+    void log_effective(std::ostream &out) const;
+};
+
+// Writes stand-aligned starter YAML (comments in Russian/English).
+bool write_starter_config_yaml(const std::filesystem::path &path, std::string *error);
+
+// Load: missing file → write starter, keep code defaults; present → merge yaml;
+// then apply env (COMPACS_LLAMA_SERVER_URL, COMPACS_EMBED_MODEL, COMPACS_UI_PORT).
+// On YAML syntax error returns false and fills *error (with line number when possible).
+bool load_app_config(const std::filesystem::path &exe_dir, AppConfig *out, std::string *error);
+
+}  // namespace compacs

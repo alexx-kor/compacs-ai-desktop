@@ -10,7 +10,7 @@ else()
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-set(SOURCES main.cpp)
+set(SOURCES main.cpp config.cpp)
 
 # Optional: embed vectors.bin at compile time (place vectors.bin next to CMakeLists.txt).
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vectors.bin")

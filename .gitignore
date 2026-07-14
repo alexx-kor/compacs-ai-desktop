@@ -16,11 +16,14 @@ llama/
 models/
 rag/
 
-# Данные индекса / экспорт со стенда
+# Данные / конфиг runtime (генерируется рядом с exe; шаблон config.yaml в репо — коммитим)
 vectors.bin
 chunks.bin
 texts.txt
 chunks.json
+
+# Локальный config.yaml рядом с собранным exe (не трогаем репозиторный шаблон)
+# build/**/config.yaml already under build/
 
 # Документация Office (бинарник)
 *.docx

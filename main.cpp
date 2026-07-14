@@ -1,6 +1,7 @@
 // COMPACS Desktop — lightweight RAG client (vectors.bin + llama-server).
 // Build: cmake -B build && cmake --build build --config Release
 
+#include "config.hpp"
 #include "httplib.h"
 #include "webview.h"
 
@@ -170,22 +171,15 @@ std::optional<std::vector<double>> json_extract_embedding_array(const std::strin
     return values;
 }
 
-std::string getenv_or(const char *name, const char *fallback) {
-    if (const char *value = std::getenv(name); value && value[0] != '\0') {
-        return value;
-    }
-    return fallback;
+// Set from wmain/main.
+const char *&argv0_path() {
+    static const char *path = "main.exe";
+    return path;
 }
 
 std::filesystem::path exe_directory() {
     std::error_code ec;
     return std::filesystem::weakly_canonical(std::filesystem::path(argv0_path()), ec).parent_path();
-}
-
-// Set from wmain/main.
-const char *&argv0_path() {
-    static const char *path = "main.exe";
-    return path;
 }
 
 // ---------------------------------------------------------------------------
@@ -401,6 +395,32 @@ struct LlamaConfig {
     std::size_t chunk_chars = 1200;
     std::size_t top_k = 6;
     double similarity_threshold = 0.7;
+    std::size_t query_max_chars = 2048;
+    int timeout_connect_sec = 5;
+    int timeout_completion_read_sec = 300;
+    int timeout_embed_read_sec = 60;
+    std::string prompt_system =
+        "Answer ONLY from the context chunks below. If not found, reply: NOT FOUND in documentation.\n\n";
+    std::string prompt_not_found = "NOT FOUND in documentation";
+
+    static LlamaConfig from_app(const compacs::AppConfig &app) {
+        LlamaConfig cfg;
+        cfg.base_url = app.llama_base_url();
+        cfg.embed_model = app.embed_model;
+        cfg.temperature = app.temperature;
+        cfg.num_predict = app.num_predict;
+        cfg.context_chunks = app.context_chunks;
+        cfg.chunk_chars = app.chunk_chars;
+        cfg.top_k = app.top_k;
+        cfg.similarity_threshold = app.similarity_threshold;
+        cfg.query_max_chars = app.query_max_chars;
+        cfg.timeout_connect_sec = app.timeout_connect_sec;
+        cfg.timeout_completion_read_sec = app.timeout_completion_read_sec;
+        cfg.timeout_embed_read_sec = app.timeout_embed_read_sec;
+        cfg.prompt_system = app.prompt_system;
+        cfg.prompt_not_found = app.prompt_not_found;
+        return cfg;
+    }
 };
 
 bool parse_base_url(const std::string &url, std::string *host, int *port) {
@@ -456,7 +476,7 @@ public:
     }
 
     bool embed(const std::string &text, std::vector<double> *out, std::string *error) const {
-        const std::string trimmed = truncate_query(text, 2048);
+        const std::string trimmed = truncate_query(text, config_.query_max_chars);
         if (embed_native(trimmed, out, error)) {
             return true;
         }
@@ -468,8 +488,8 @@ public:
         const std::function<bool(const std::string &token)> &on_token,
         std::string *error) const {
         httplib::Client cli(host_, port_);
-        cli.set_connection_timeout(5, 0);
-        cli.set_read_timeout(300, 0);
+        cli.set_connection_timeout(config_.timeout_connect_sec, 0);
+        cli.set_read_timeout(config_.timeout_completion_read_sec, 0);
 
         const std::string body =
             "{\"prompt\":\"" + json_escape(prompt) +
@@ -539,8 +559,8 @@ private:
 
     bool embed_native(const std::string &text, std::vector<double> *out, std::string *error) const {
         httplib::Client cli(host_, port_);
-        cli.set_connection_timeout(5, 0);
-        cli.set_read_timeout(60, 0);
+        cli.set_connection_timeout(config_.timeout_connect_sec, 0);
+        cli.set_read_timeout(config_.timeout_embed_read_sec, 0);
         const std::string body = "{\"content\":\"" + json_escape(text) + "\"}";
         auto response = cli.Post("/embedding", body, "application/json");
         if (!response || response->status >= 400) {
@@ -567,8 +587,8 @@ private:
 
     bool embed_openai(const std::string &text, std::vector<double> *out, std::string *error) const {
         httplib::Client cli(host_, port_);
-        cli.set_connection_timeout(5, 0);
-        cli.set_read_timeout(60, 0);
+        cli.set_connection_timeout(config_.timeout_connect_sec, 0);
+        cli.set_read_timeout(config_.timeout_embed_read_sec, 0);
         const std::string body =
             "{\"input\":\"" + json_escape(text) + "\",\"model\":\"" + json_escape(config_.embed_model) +
             "\",\"encoding_format\":\"float\"}";
@@ -616,15 +636,15 @@ std::string llama3_wrap(const std::string &role, const std::string &content) {
 std::string build_rag_prompt(
     const std::string &question,
     const std::vector<ChunkHit> &hits,
-    std::size_t chunk_char_limit) {
-    std::string context =
-        "Answer ONLY from the context chunks below. If not found, reply: NOT FOUND in documentation.\n\n";
+    std::size_t chunk_char_limit,
+    const std::string &system_prefix) {
+    std::string context = system_prefix;
     for (const auto &hit : hits) {
         std::string clipped = hit.text;
         if (clipped.size() > chunk_char_limit) {
             clipped.resize(chunk_char_limit);
         }
-        if (context.size() > 80) {
+        if (context.size() > system_prefix.size()) {
             context += "\n\n";
         }
         context += "[" + hit.source + ", p." + std::to_string(hit.page) + "]\n" + clipped;
@@ -708,7 +728,7 @@ public:
 
         auto hits = search_vectors(store_, embedding, llama_.top_k, llama_.similarity_threshold);
         if (hits.empty()) {
-            result.answer = "NOT FOUND in documentation";
+            result.answer = llama_.prompt_not_found;
             if (on_token) {
                 on_token(result.answer);
             }
@@ -725,7 +745,8 @@ public:
             on_status("generation");
         }
 
-        const std::string prompt = build_rag_prompt(question, hits, llama_.chunk_chars);
+        const std::string prompt =
+            build_rag_prompt(question, hits, llama_.chunk_chars, llama_.prompt_system);
         std::ostringstream answer;
         std::string gen_error;
         const bool ok = client_.completion_stream(
@@ -1004,14 +1025,16 @@ private:
     std::filesystem::path assets_dir_;
 };
 
-bool load_vector_store(VectorStore *store, std::string *error) {
+bool load_vector_store(VectorStore *store, const std::string &vector_store_rel, std::string *error) {
 #ifdef COMPACS_EMBEDDED_VECTORS
     if (store->load_bytes(compacs_embed::kVectorsData, compacs_embed::kVectorsSize, error)) {
         return true;
     }
 #endif
     const auto exe_dir = exe_directory();
+    const std::filesystem::path configured(vector_store_rel);
     const auto candidates = {
+        configured.is_absolute() ? configured : (exe_dir / configured),
         exe_dir / "vectors.bin",
         exe_dir.parent_path() / "vectors.bin",
         std::filesystem::current_path() / "vectors.bin",
@@ -1027,39 +1050,34 @@ bool load_vector_store(VectorStore *store, std::string *error) {
     return false;
 }
 
-LlamaConfig load_llama_config() {
-    LlamaConfig cfg;
-    cfg.base_url = getenv_or("COMPACS_LLAMA_SERVER_URL", "http://127.0.0.1:8080");
-    cfg.embed_model = getenv_or("COMPACS_EMBED_MODEL", "nomic-embed-text");
-    return cfg;
-}
-
 }  // namespace
 
 int main(int argc, char *argv[]) {
     argv0_path() = (argc > 0 && argv[0]) ? argv[0] : "main.exe";
 
+    const auto exe_dir = exe_directory();
+    compacs::AppConfig app_cfg;
+    std::string cfg_error;
+    if (!compacs::load_app_config(exe_dir, &app_cfg, &cfg_error)) {
+        std::cerr << "Config error: " << cfg_error << "\n";
+        return 1;
+    }
+    app_cfg.log_effective(std::cout);
+
     VectorStore store;
     std::string load_error;
-    if (!load_vector_store(&store, &load_error)) {
+    if (!load_vector_store(&store, app_cfg.vector_store, &load_error)) {
         std::cerr << "Vector load error: " << load_error << "\n";
     }
 
-    const LlamaConfig llama_cfg = load_llama_config();
+    const LlamaConfig llama_cfg = LlamaConfig::from_app(app_cfg);
     RagController controller(std::move(store), llama_cfg);
 
-    const int api_port = []() {
-        const std::string raw = getenv_or("COMPACS_UI_PORT", "8765");
-        try {
-            return std::stoi(raw);
-        } catch (...) {
-            return 8765;
-        }
-    }();
+    const int api_port = app_cfg.ui_port;
 
     ApiServer api(&controller);
     std::string api_error;
-    const auto assets_dir = exe_directory() / "assets";
+    const auto assets_dir = exe_dir / app_cfg.ui_assets_dir;
     if (!api.start(api_port, assets_dir, &api_error)) {
         std::cerr << "API error: " << api_error << "\n";
         return 1;
@@ -1075,8 +1093,8 @@ int main(int argc, char *argv[]) {
     }
 
     webview::webview app;
-    app.set_title("COMPACS RAG");
-    app.set_size(1024, 720, WEBVIEW_HINT_NONE);
+    app.set_title(app_cfg.ui_title.c_str());
+    app.set_size(app_cfg.ui_width, app_cfg.ui_height, WEBVIEW_HINT_NONE);
     app.navigate(api.base_url().c_str());
 
     std::cout << "COMPACS Desktop running at " << api.base_url() << "\n";
