@@ -1014,7 +1014,14 @@ private:
         }
         std::ostringstream buffer;
         buffer << input.rdbuf();
-        res.set_content(buffer.str(), "text/html; charset=utf-8");
+        std::string html = buffer.str();
+        const std::string base = base_url();
+        constexpr const char *kToken = "__COMPACS_API_BASE__";
+        for (std::size_t pos = 0; (pos = html.find(kToken, pos)) != std::string::npos;) {
+            html.replace(pos, std::strlen(kToken), base);
+            pos += base.size();
+        }
+        res.set_content(html, "text/html; charset=utf-8");
     }
 
     RagController *controller_ = nullptr;
@@ -1095,7 +1102,9 @@ int main(int argc, char *argv[]) {
     webview::webview app;
     app.set_title(app_cfg.ui_title.c_str());
     app.set_size(app_cfg.ui_width, app_cfg.ui_height, WEBVIEW_HINT_NONE);
-    app.navigate(api.base_url().c_str());
+    const std::string ui_base = api.base_url();
+    app.init("window.COMPACS_API_BASE='" + ui_base + "';");
+    app.navigate(ui_base + "/");
 
     std::cout << "COMPACS Desktop running at " << api.base_url() << "\n";
     std::cout << status << "\n";

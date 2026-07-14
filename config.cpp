@@ -408,7 +408,8 @@ models:
 
 server:
   host: 127.0.0.1
-  port: 8080
+  # рабочий порт llama-server (embed+completion на одном процессе)
+  port: 8081
   # reserved: not read by main.cpp, used by launcher
   gen_port: 8082
   embed_port: 8081

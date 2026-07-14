@@ -81,7 +81,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 </section>
 
 <script>
-const API = window.location.origin;
+const API = window.COMPACS_API_BASE || "__COMPACS_API_BASE__";
 
 function $(id) { return document.getElementById(id); }
 
