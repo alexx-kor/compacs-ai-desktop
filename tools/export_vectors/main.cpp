@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <optional>
@@ -289,46 +290,151 @@ void write_record(std::ostream &out, const ExportRow &row) {
     }
 }
 
+std::vector<ExportRow> load_from_rag_dir(const std::string &rag_dir) {
+    namespace fs = std::filesystem;
+    const fs::path root(rag_dir);
+    const auto meta_path = root / "meta.json";
+    const auto texts_path = root / "texts.txt";
+    const auto vectors_path = root / "vectors.bin";
+
+    const std::string meta_json = read_file(meta_path.string());
+    const auto row_objects = extract_row_objects(meta_json);
+
+    std::ifstream texts(texts_path, std::ios::binary);
+    if (!texts) {
+        throw std::runtime_error("cannot open " + texts_path.string());
+    }
+    texts.seekg(0, std::ios::end);
+    const auto texts_size = static_cast<std::uint64_t>(texts.tellg());
+    texts.seekg(0, std::ios::beg);
+    std::vector<char> text_blob(static_cast<std::size_t>(texts_size));
+    texts.read(text_blob.data(), static_cast<std::streamsize>(texts_size));
+
+    std::ifstream vectors(vectors_path, std::ios::binary);
+    if (!vectors) {
+        throw std::runtime_error("cannot open " + vectors_path.string());
+    }
+    char magic[8] = {};
+    vectors.read(magic, 8);
+    if (std::memcmp(magic, "RAGVEC01", 8) != 0) {
+        throw std::runtime_error("unexpected rag vectors magic (expected RAGVEC01)");
+    }
+    std::uint32_t version = 0;
+    std::uint32_t count = 0;
+    std::uint32_t dim = 0;
+    std::uint32_t reserved = 0;
+    vectors.read(reinterpret_cast<char *>(&version), 4);
+    vectors.read(reinterpret_cast<char *>(&count), 4);
+    vectors.read(reinterpret_cast<char *>(&dim), 4);
+    vectors.read(reinterpret_cast<char *>(&reserved), 4);
+    (void)reserved;
+    if (version != 1 || dim != kDefaultDim || count == 0) {
+        throw std::runtime_error("unsupported rag vectors header");
+    }
+    if (count != row_objects.size()) {
+        throw std::runtime_error("meta rows (" + std::to_string(row_objects.size()) +
+                                 ") != vectors count (" + std::to_string(count) + ")");
+    }
+
+    std::vector<ExportRow> rows;
+    rows.reserve(count);
+    for (std::uint32_t i = 0; i < count; ++i) {
+        const auto &object_json = row_objects[i];
+        ExportRow row;
+        if (const auto id_str = json_get_string(object_json, "id")) {
+            char *end = nullptr;
+            row.id = static_cast<std::uint32_t>(std::strtoul(id_str->c_str(), &end, 10));
+        } else if (const auto id_num = json_get_int(object_json, "id")) {
+            row.id = static_cast<std::uint32_t>(*id_num);
+        } else {
+            row.id = i;
+        }
+        if (const auto page = json_get_int(object_json, "page")) {
+            row.page = static_cast<std::uint32_t>(*page);
+        }
+        const auto source = json_get_string(object_json, "source");
+        if (!source || source->empty()) {
+            throw std::runtime_error("rag row " + std::to_string(i + 1) + ": missing source");
+        }
+        row.source = *source;
+
+        const auto offset = json_get_int(object_json, "offset");
+        const auto length = json_get_int(object_json, "length");
+        if (!offset || !length || *offset < 0 || *length <= 0) {
+            throw std::runtime_error("rag row " + std::to_string(i + 1) + ": bad offset/length");
+        }
+        const auto off = static_cast<std::uint64_t>(*offset);
+        const auto len = static_cast<std::uint64_t>(*length);
+        if (off + len > texts_size) {
+            throw std::runtime_error("rag row " + std::to_string(i + 1) + ": text slice OOB");
+        }
+        row.text.assign(text_blob.data() + off, static_cast<std::size_t>(len));
+
+        row.embedding.resize(kDefaultDim);
+        vectors.read(reinterpret_cast<char *>(row.embedding.data()),
+                     static_cast<std::streamsize>(kDefaultDim * sizeof(float)));
+        if (!vectors) {
+            throw std::runtime_error("rag row " + std::to_string(i + 1) + ": truncated embedding");
+        }
+        rows.push_back(std::move(row));
+    }
+    return rows;
+}
+
+void write_compacs1(const std::string &output_path, const std::vector<ExportRow> &rows) {
+    std::ofstream out(output_path, std::ios::binary | std::ios::trunc);
+    if (!out) {
+        throw std::runtime_error("cannot open output: " + output_path);
+    }
+    out.write(kMagic, 8);
+    write_u32(out, kVersion);
+    write_u32(out, static_cast<std::uint32_t>(rows.size()));
+    write_u32(out, static_cast<std::uint32_t>(kDefaultDim));
+    write_u32(out, 0);
+    for (const auto &row : rows) {
+        write_record(out, row);
+    }
+    out.flush();
+    if (!out) {
+        throw std::runtime_error("write failed: " + output_path);
+    }
+}
+
 }  // namespace
 
 int main(int argc, char *argv[]) {
-    const std::string input_path = (argc > 1 && argv[1] && argv[1][0] != '\0') ? argv[1] : "chunks.json";
-    const std::string output_path = (argc > 2 && argv[2] && argv[2][0] != '\0') ? argv[2] : "vectors.bin";
-
     try {
-        const std::string json = read_file(input_path);
-        const auto row_objects = extract_row_objects(json);
+        std::string input_path = "chunks.json";
+        std::string output_path = "vectors.bin";
+        bool from_rag = false;
+
+        if (argc > 1 && argv[1] && std::string(argv[1]) == "--from-rag") {
+            from_rag = true;
+            input_path = (argc > 2 && argv[2] && argv[2][0] != '\0') ? argv[2] : "rag";
+            output_path = (argc > 3 && argv[3] && argv[3][0] != '\0') ? argv[3] : "vectors.bin";
+        } else {
+            input_path = (argc > 1 && argv[1] && argv[1][0] != '\0') ? argv[1] : "chunks.json";
+            output_path = (argc > 2 && argv[2] && argv[2][0] != '\0') ? argv[2] : "vectors.bin";
+        }
 
         std::vector<ExportRow> rows;
-        rows.reserve(row_objects.size());
-        for (std::size_t i = 0; i < row_objects.size(); ++i) {
-            rows.push_back(parse_row(row_objects[i], i + 1));
+        if (from_rag) {
+            rows = load_from_rag_dir(input_path);
+        } else {
+            const std::string json = read_file(input_path);
+            const auto row_objects = extract_row_objects(json);
+            rows.reserve(row_objects.size());
+            for (std::size_t i = 0; i < row_objects.size(); ++i) {
+                rows.push_back(parse_row(row_objects[i], i + 1));
+            }
         }
 
-        std::ofstream out(output_path, std::ios::binary | std::ios::trunc);
-        if (!out) {
-            std::cerr << "cannot open output: " << output_path << "\n";
-            return 1;
-        }
-
-        out.write(kMagic, 8);
-        write_u32(out, kVersion);
-        write_u32(out, static_cast<std::uint32_t>(rows.size()));
-        write_u32(out, static_cast<std::uint32_t>(kDefaultDim));
-        write_u32(out, 0);
-
-        for (const auto &row : rows) {
-            write_record(out, row);
-        }
-        out.flush();
-        if (!out) {
-            std::cerr << "write failed: " << output_path << "\n";
-            return 1;
-        }
+        write_compacs1(output_path, rows);
 
         std::ifstream check(output_path, std::ios::binary | std::ios::ate);
         const auto file_size = check ? static_cast<std::uint64_t>(check.tellg()) : 0ULL;
         std::cout << "COMPACS1 export OK\n"
+                  << "  mode:   " << (from_rag ? "--from-rag" : "chunks.json") << "\n"
                   << "  input:  " << input_path << "\n"
                   << "  output: " << output_path << "\n"
                   << "  records: " << rows.size() << "\n"
