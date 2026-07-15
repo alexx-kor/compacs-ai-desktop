@@ -15,9 +15,9 @@ models:
 
 server:
   host: 127.0.0.1
-  # рабочий порт llama-server (embed+completion на одном процессе)
+  # legacy single-URL field (log); desktop uses embed_port + gen_port
   port: 8081
-  # reserved: not read by main.cpp, used by launcher
+  # dual-channel llama-server (offline desktop)
   gen_port: 8082
   embed_port: 8081
   timeouts:

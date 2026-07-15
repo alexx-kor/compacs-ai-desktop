@@ -261,20 +261,8 @@ void apply_yaml_map(const YamlMap &m, AppConfig *cfg) {
         cfg->src_base_url = ConfigSource::Yaml;
     }
 
-    if (has_key(m, "server.gen_port")) {
-        try {
-            cfg->server_gen_port = std::stoi(m.at("server.gen_port"));
-        } catch (...) {
-            throw ParseError("invalid integer for server.gen_port");
-        }
-    }
-    if (has_key(m, "server.embed_port")) {
-        try {
-            cfg->server_embed_port = std::stoi(m.at("server.embed_port"));
-        } catch (...) {
-            throw ParseError("invalid integer for server.embed_port");
-        }
-    }
+    apply_int(m, "server.gen_port", &cfg->server_gen_port, &cfg->src_gen_port, code.server_gen_port);
+    apply_int(m, "server.embed_port", &cfg->server_embed_port, &cfg->src_embed_port, code.server_embed_port);
 
     apply_int(m, "server.timeouts.connect_sec", &cfg->timeout_connect_sec, &cfg->src_timeout_connect,
               code.timeout_connect_sec);
@@ -353,12 +341,14 @@ const char *to_string(ConfigSource source) {
 
 void AppConfig::log_effective(std::ostream &out) const {
     out << "=== COMPACS config (effective) ===\n";
-    out << "  llama_base_url = " << llama_base_url() << " (" << to_string(src_base_url) << ")\n";
+    out << "  llama_base_url = " << llama_base_url() << " (" << to_string(src_base_url) << ")  # legacy\n";
+    out << "  llama_embed_url = " << llama_embed_url() << " (" << to_string(src_embed_port) << ")\n";
+    out << "  llama_gen_url = " << llama_gen_url() << " (" << to_string(src_gen_port) << ")\n";
     out << "  models.embed_model = " << embed_model << " (" << to_string(src_embed_model) << ")\n";
     out << "  models.generator = " << model_generator << " (reserved)\n";
     out << "  models.embedder = " << model_embedder << " (reserved)\n";
-    out << "  server.gen_port = " << server_gen_port << " (reserved)\n";
-    out << "  server.embed_port = " << server_embed_port << " (reserved)\n";
+    out << "  server.gen_port = " << server_gen_port << " (" << to_string(src_gen_port) << ")\n";
+    out << "  server.embed_port = " << server_embed_port << " (" << to_string(src_embed_port) << ")\n";
     out << "  retrieval.vector_store = " << vector_store << " (" << to_string(src_vector_store) << ")\n";
     out << "  retrieval.top_k = " << top_k << " (" << to_string(src_top_k) << ")\n";
     out << "  retrieval.similarity_threshold = " << similarity_threshold << " ("
@@ -408,9 +398,9 @@ models:
 
 server:
   host: 127.0.0.1
-  # рабочий порт llama-server (embed+completion на одном процессе)
+  # legacy single-URL field (log); desktop uses embed_port + gen_port
   port: 8081
-  # reserved: not read by main.cpp, used by launcher
+  # dual-channel llama-server (offline desktop)
   gen_port: 8082
   embed_port: 8081
   timeouts:

@@ -150,6 +150,13 @@ std::optional<std::vector<double>> json_extract_embedding_array(const std::strin
         return std::nullopt;
     }
     ++pos;
+    // llama-server may return embedding:[[f32...]] (batched); accept one nesting level.
+    while (pos < json.size() && std::isspace(static_cast<unsigned char>(json[pos]))) {
+        ++pos;
+    }
+    if (pos < json.size() && json[pos] == '[') {
+        ++pos;
+    }
     std::vector<double> values;
     while (pos < json.size()) {
         while (pos < json.size() && (std::isspace(static_cast<unsigned char>(json[pos])) || json[pos] == ',')) {
@@ -388,7 +395,8 @@ std::vector<ChunkHit> search_vectors(
 // ---------------------------------------------------------------------------
 
 struct LlamaConfig {
-    std::string base_url = "http://127.0.0.1:8080";
+    std::string base_url = "http://127.0.0.1:8082";   // /completion (gen)
+    std::string embed_url = "http://127.0.0.1:8081";  // /embedding
     std::string embed_model = "nomic-embed-text";
     double temperature = 0.1;
     int num_predict = 512;
@@ -406,7 +414,8 @@ struct LlamaConfig {
 
     static LlamaConfig from_app(const compacs::AppConfig &app) {
         LlamaConfig cfg;
-        cfg.base_url = app.llama_base_url();
+        cfg.base_url = app.llama_gen_url();
+        cfg.embed_url = app.llama_embed_url();
         cfg.embed_model = app.embed_model;
         cfg.temperature = app.temperature;
         cfg.num_predict = app.num_predict;
@@ -473,22 +482,74 @@ public:
     explicit LlamaClient(LlamaConfig config)
         : config_(std::move(config)) {
         config_.base_url = trim_trailing_slash(config_.base_url);
-        parse_base_url(config_.base_url, &host_, &port_);
+        config_.embed_url = trim_trailing_slash(config_.embed_url);
+        parse_base_url(config_.base_url, &gen_host_, &gen_port_);
+        parse_base_url(config_.embed_url, &embed_host_, &embed_port_);
     }
 
     bool embed(const std::string &text, std::vector<double> *out, std::string *error) const {
         const std::string trimmed = truncate_query(text, config_.query_max_chars);
-        if (embed_native(trimmed, out, error)) {
+        std::string native_error;
+        if (embed_native(trimmed, out, &native_error)) {
+            if (error) {
+                error->clear();
+            }
             return true;
         }
-        return embed_openai(trimmed, out, error);
+        std::string openai_error;
+        if (embed_openai(trimmed, out, &openai_error)) {
+            if (error) {
+                error->clear();
+            }
+            return true;
+        }
+        if (error) {
+            *error = !openai_error.empty() ? openai_error : native_error;
+        }
+        return false;
+    }
+
+    bool completion(
+        const std::string &prompt,
+        std::string *out,
+        std::string *error) const {
+        httplib::Client cli(gen_host_, gen_port_);
+        cli.set_connection_timeout(config_.timeout_connect_sec, 0);
+        cli.set_read_timeout(config_.timeout_completion_read_sec, 0);
+
+        const std::string body =
+            "{\"prompt\":\"" + json_escape(prompt) +
+            "\",\"stream\":false,\"temperature\":" + std::to_string(config_.temperature) +
+            ",\"n_predict\":" + std::to_string(config_.num_predict) + "}";
+
+        const auto response = cli.Post("/completion", body, "application/json");
+        if (!response) {
+            if (error) {
+                *error = "llama-server /completion unreachable at " + config_.base_url;
+            }
+            return false;
+        }
+        if (response->status < 200 || response->status >= 300) {
+            if (error) {
+                *error = "llama-server /completion HTTP " + std::to_string(response->status);
+            }
+            return false;
+        }
+        if (auto content = json_get_string(response->body, "content")) {
+            *out = *content;
+            return true;
+        }
+        if (error) {
+            *error = "cannot parse /completion response";
+        }
+        return false;
     }
 
     bool completion_stream(
         const std::string &prompt,
         const std::function<bool(const std::string &token)> &on_token,
         std::string *error) const {
-        httplib::Client cli(host_, port_);
+        httplib::Client cli(gen_host_, gen_port_);
         cli.set_connection_timeout(config_.timeout_connect_sec, 0);
         cli.set_read_timeout(config_.timeout_completion_read_sec, 0);
 
@@ -559,7 +620,7 @@ private:
     }
 
     bool embed_native(const std::string &text, std::vector<double> *out, std::string *error) const {
-        httplib::Client cli(host_, port_);
+        httplib::Client cli(embed_host_, embed_port_);
         cli.set_connection_timeout(config_.timeout_connect_sec, 0);
         cli.set_read_timeout(config_.timeout_embed_read_sec, 0);
         const std::string body = "{\"content\":\"" + json_escape(text) + "\"}";
@@ -569,7 +630,7 @@ private:
         }
         if (!response) {
             if (error) {
-                *error = "llama-server /embedding unreachable";
+                *error = "llama-server /embedding unreachable at " + config_.embed_url;
             }
             return false;
         }
@@ -587,7 +648,7 @@ private:
     }
 
     bool embed_openai(const std::string &text, std::vector<double> *out, std::string *error) const {
-        httplib::Client cli(host_, port_);
+        httplib::Client cli(embed_host_, embed_port_);
         cli.set_connection_timeout(config_.timeout_connect_sec, 0);
         cli.set_read_timeout(config_.timeout_embed_read_sec, 0);
         const std::string body =
@@ -596,7 +657,7 @@ private:
         const auto response = cli.Post("/v1/embeddings", body, "application/json");
         if (!response) {
             if (error) {
-                *error = "llama-server /v1/embeddings unreachable";
+                *error = "llama-server /v1/embeddings unreachable at " + config_.embed_url;
             }
             return false;
         }
@@ -617,8 +678,10 @@ private:
     }
 
     LlamaConfig config_;
-    std::string host_;
-    int port_ = 8080;
+    std::string gen_host_;
+    int gen_port_ = 8082;
+    std::string embed_host_;
+    int embed_port_ = 8081;
 };
 
 // ---------------------------------------------------------------------------
@@ -694,6 +757,7 @@ public:
 
     void ask_stream(
         const std::string &question,
+        bool stream_tokens,
         const std::function<void(const std::string &)> &on_status,
         const std::function<void(const std::string &)> &on_token,
         const std::function<void(const AskResult &)> &on_done) {
@@ -750,16 +814,24 @@ public:
             build_rag_prompt(question, hits, llama_.chunk_chars, llama_.prompt_system);
         std::ostringstream answer;
         std::string gen_error;
-        const bool ok = client_.completion_stream(
-            prompt,
-            [&](const std::string &token) {
-                answer << token;
-                if (on_token) {
+        bool ok = false;
+        if (stream_tokens && on_token) {
+            ok = client_.completion_stream(
+                prompt,
+                [&](const std::string &token) {
+                    answer << token;
                     on_token(token);
-                }
-                return true;
-            },
-            &gen_error);
+                    return true;
+                },
+                &gen_error);
+        } else {
+            std::string full;
+            ok = client_.completion(prompt, &full, &gen_error);
+            answer << full;
+            if (ok && on_token && !full.empty()) {
+                on_token(full);
+            }
+        }
 
         result.answer = answer.str();
         if (!ok && result.answer.empty()) {
@@ -773,13 +845,10 @@ public:
         AskResult result;
         ask_stream(
             question,
+            false,
             [](const std::string &) {},
-            [&](const std::string &token) { result.answer += token; },
-            [&](const AskResult &done) {
-                result.sources = done.sources;
-                result.error = done.error;
-                result.ms = done.ms;
-            });
+            [](const std::string &) {},
+            [&](const AskResult &done) { result = done; });
         return result;
     }
 
@@ -874,7 +943,8 @@ public:
             const std::string body =
                 "{\"chunks\":" + std::to_string(controller_->chunk_count()) +
                 ",\"dim\":" + std::to_string(controller_->embedding_dim()) +
-                ",\"llama\":\"" + json_escape(controller_->llama_config().base_url) + "\"}";
+                ",\"llama_embed\":\"" + json_escape(controller_->llama_config().embed_url) +
+                "\",\"llama_gen\":\"" + json_escape(controller_->llama_config().base_url) + "\"}";
             res.set_content(body, "application/json");
         });
 
@@ -921,6 +991,7 @@ public:
             std::thread([this, question = *question, queue]() {
                 controller_->ask_stream(
                     question,
+                    true,
                     [queue](const std::string &phase) {
                         queue->push(format_sse("status", "{\"phase\":\"" + json_escape(phase) + "\"}"));
                     },
@@ -1095,7 +1166,8 @@ int main(int argc, char *argv[]) {
     std::string ready_error;
     if (controller.ready(&ready_error)) {
         status = std::to_string(controller.chunk_count()) + " chunks, dim=" +
-                 std::to_string(controller.embedding_dim()) + " | " + llama_cfg.base_url;
+                 std::to_string(controller.embedding_dim()) + " | embed " + llama_cfg.embed_url +
+                 " | gen " + llama_cfg.base_url;
     } else {
         status = "Index: " + ready_error;
     }

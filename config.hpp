@@ -23,12 +23,14 @@ struct AppConfig {
     std::string embed_model = "nomic-embed-text";
     ConfigSource src_embed_model = ConfigSource::Default;
 
-    // --- server ---
+    // --- server (dual-channel: embed_port + gen_port) ---
     std::string server_host = "127.0.0.1";
-    int server_port = 8080;
-    int server_gen_port = 8082;     // reserved
-    int server_embed_port = 8081;   // reserved
+    int server_port = 8080;         // legacy / log; prefer embed_port + gen_port
+    int server_gen_port = 8082;     // /completion
+    int server_embed_port = 8081;   // /embedding
     ConfigSource src_base_url = ConfigSource::Default;
+    ConfigSource src_gen_port = ConfigSource::Default;
+    ConfigSource src_embed_port = ConfigSource::Default;
 
     int timeout_connect_sec = 5;
     int timeout_completion_read_sec = 300;
@@ -80,6 +82,14 @@ struct AppConfig {
 
     std::string llama_base_url() const {
         return "http://" + server_host + ":" + std::to_string(server_port);
+    }
+
+    std::string llama_embed_url() const {
+        return "http://" + server_host + ":" + std::to_string(server_embed_port);
+    }
+
+    std::string llama_gen_url() const {
+        return "http://" + server_host + ":" + std::to_string(server_gen_port);
     }
 
     void log_effective(std::ostream &out) const;
