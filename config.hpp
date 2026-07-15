@@ -62,7 +62,9 @@ struct AppConfig {
 
     // --- prompt ---
     std::string prompt_system =
-        "Answer ONLY from the context chunks below. If not found, reply: NOT FOUND in documentation.\n\n";
+        "Отвечай ТОЛЬКО по фрагментам контекста ниже и только на русском языке. "
+        "Если в контексте нет ответа — напиши ровно: NOT FOUND in documentation. "
+        "Не выдумывай факты. В конце ответа кратко укажи источники (файл и страница), если они есть.\n\n";
     std::string prompt_not_found = "NOT FOUND in documentation";
     ConfigSource src_prompt_system = ConfigSource::Default;
     ConfigSource src_prompt_not_found = ConfigSource::Default;
