@@ -412,11 +412,11 @@ retrieval:
   vector_store: vectors.bin
   # stand-aligned (mcp-layer config.yml rag.top_k)
   top_k: 12
-  # stand-aligned cosine distance threshold (see header comment)
-  similarity_threshold: 0.35
-  # stand-aligned (ollama.context_chunks / chunk_chars)
-  context_chunks: 3
-  chunk_chars: 350
+  # cosine distance; start 0.55 (raise toward 0.7 if too many empty hits)
+  similarity_threshold: 0.55
+  # full chunk text into prompt (stored avg ~1335 chars)
+  context_chunks: 6
+  chunk_chars: 1400
   query_max_chars: 2048
 
 generation:
