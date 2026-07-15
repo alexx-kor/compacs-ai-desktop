@@ -15,6 +15,7 @@ build/
 llama/
 models/
 rag/
+dist/
 
 # Данные / конфиг runtime (генерируется рядом с exe; шаблон config.yaml в репо — коммитим)
 vectors.bin
