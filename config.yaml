@@ -32,14 +32,15 @@ retrieval:
   # cosine distance; start 0.55 (raise toward 0.7 if too many empty hits)
   similarity_threshold: 0.55
   # full chunk text into prompt (stored avg ~1335 chars)
-  context_chunks: 6
+  # on CPU desktop keep context_chunks at 3 to avoid multi-minute TTFT with 6×1400
+  context_chunks: 3
   chunk_chars: 1400
   query_max_chars: 2048
 
 generation:
   temperature: 0.1
-  # stand-aligned (ollama.num_predict)
-  num_predict: 400
+  # shorter answers keep CPU latency acceptable
+  num_predict: 256
   # reserved: not read by main.cpp, used by launcher (-c)
   num_ctx: 8192
 
