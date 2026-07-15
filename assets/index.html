@@ -114,55 +114,27 @@ $("ask").onclick = async () => {
     const res = await fetch(API + "/api/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, stream: true }),
+      body: JSON.stringify({ question, stream: false }),
     });
+    if (res.status === 429) {
+      answerEl.textContent = "Модель занята — дождитесь окончания предыдущего вопроса.";
+      return;
+    }
     if (!res.ok) {
       let detail = res.statusText;
       try { detail = (await res.json()).error || detail; } catch (_) {}
       answerEl.textContent = "Ошибка: " + detail;
       return;
     }
-    if (!res.body) {
-      answerEl.textContent = await res.text();
+    answerEl.textContent = "Генерация ответа…";
+    const data = await res.json();
+    if (data.error) {
+      answerEl.textContent = "Ошибка: " + data.error;
       return;
     }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let answer = "";
-    let sources = [];
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const parts = buffer.split("\n\n");
-      buffer = parts.pop() || "";
-      for (const block of parts) {
-        const lines = block.split("\n");
-        let event = "message";
-        let data = "";
-        for (const line of lines) {
-          if (line.startsWith("event: ")) event = line.slice(7);
-          if (line.startsWith("data: ")) data = line.slice(6);
-        }
-        if (!data) continue;
-        const parsed = JSON.parse(data);
-        if (event === "status") {
-          if (parsed.phase === "retrieval") answerEl.textContent = "Поиск в индексе…";
-          if (parsed.phase === "generation") answerEl.textContent = "Генерация ответа…";
-        }
-        if (event === "token") {
-          answer += parsed.text || "";
-          answerEl.textContent = answer;
-        }
-        if (event === "done") {
-          answer = parsed.answer || answer;
-          sources = parsed.sources || [];
-        }
-      }
-    }
+    const sources = data.sources || [];
     const srcText = sources.map(s => "- " + s.source + ", стр. " + s.page).join("\n");
-    answerEl.textContent = answer + (srcText ? "\n\nИсточники:\n" + srcText : "");
+    answerEl.textContent = (data.answer || "") + (srcText ? "\n\nИсточники:\n" + srcText : "");
   } catch (err) {
     answerEl.textContent = "Ошибка сети: " + err.message;
   } finally {

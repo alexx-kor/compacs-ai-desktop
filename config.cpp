@@ -406,7 +406,7 @@ server:
   timeouts:
     connect_sec: 5
     completion_read_sec: 300
-    embed_read_sec: 60
+    embed_read_sec: 90
 
 retrieval:
   vector_store: vectors.bin
@@ -428,7 +428,9 @@ generation:
 
 prompt:
   system: |
-    Answer ONLY from the context chunks below. If not found, reply: NOT FOUND in documentation.
+    Отвечай ТОЛЬКО по фрагментам контекста ниже и только на русском языке.
+    Если в контексте нет ответа — напиши ровно: NOT FOUND in documentation.
+    Не выдумывай факты. В конце ответа кратко укажи источники (файл и страница), если они есть.
 
   not_found: NOT FOUND in documentation
 
