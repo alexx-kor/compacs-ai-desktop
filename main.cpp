@@ -4,6 +4,7 @@
 #include "config.hpp"
 #include "format_vectors.hpp"
 #include "httplib.h"
+#include "rag_pipeline.hpp"
 #include "webview.h"
 
 #include <algorithm>
@@ -399,18 +400,34 @@ struct LlamaConfig {
     std::string embed_url = "http://127.0.0.1:8081";  // /embedding
     std::string embed_model = "nomic-embed-text";
     double temperature = 0.1;
-    int num_predict = 512;
+    int num_predict = 250;
     std::size_t context_chunks = 6;
-    std::size_t chunk_chars = 1200;
-    std::size_t top_k = 6;
-    double similarity_threshold = 0.7;
+    std::size_t chunk_chars = 800;
+    std::size_t top_k = 12;
+    std::size_t rerank_top_k = 8;
+    double similarity_threshold = 0.30;
     std::size_t query_max_chars = 2048;
+    bool hybrid_enabled = true;
+    bool rerank_enabled = true;
+    bool collection_routing_enabled = true;
     int timeout_connect_sec = 5;
     int timeout_completion_read_sec = 300;
-    int timeout_embed_read_sec = 60;
+    int timeout_embed_read_sec = 90;
     std::string prompt_system =
         "Answer ONLY from the context chunks below. If not found, reply: NOT FOUND in documentation.\n\n";
     std::string prompt_not_found = "NOT FOUND in documentation";
+
+    compacs::rag::PipelineConfig pipeline_config() const {
+        compacs::rag::PipelineConfig cfg;
+        cfg.hybrid.top_k = top_k;
+        cfg.hybrid.similarity_threshold = similarity_threshold;
+        cfg.hybrid.enabled = hybrid_enabled;
+        cfg.rerank_enabled = rerank_enabled;
+        cfg.collection_routing_enabled = collection_routing_enabled;
+        cfg.rerank_top_k = rerank_top_k;
+        cfg.context_chunks = context_chunks;
+        return cfg;
+    }
 
     static LlamaConfig from_app(const compacs::AppConfig &app) {
         LlamaConfig cfg;
@@ -422,8 +439,12 @@ struct LlamaConfig {
         cfg.context_chunks = app.context_chunks;
         cfg.chunk_chars = app.chunk_chars;
         cfg.top_k = app.top_k;
+        cfg.rerank_top_k = app.rerank_top_k;
         cfg.similarity_threshold = app.similarity_threshold;
         cfg.query_max_chars = app.query_max_chars;
+        cfg.hybrid_enabled = app.hybrid_enabled;
+        cfg.rerank_enabled = app.rerank_enabled;
+        cfg.collection_routing_enabled = app.collection_routing_enabled;
         cfg.timeout_connect_sec = app.timeout_connect_sec;
         cfg.timeout_completion_read_sec = app.timeout_completion_read_sec;
         cfg.timeout_embed_read_sec = app.timeout_embed_read_sec;
@@ -731,8 +752,21 @@ struct AskResult {
 
 class RagController {
 public:
-    RagController(VectorStore store, LlamaConfig llama)
-        : store_(std::move(store)), llama_(std::move(llama)), client_(llama_) {}
+    RagController(VectorStore store, LlamaConfig llama, compacs::rag::LemmaMap lemmas)
+        : store_(std::move(store)), llama_(std::move(llama)), client_(llama_), lemmas_(std::move(lemmas)) {
+        std::vector<compacs::rag::RagChunk> chunks;
+        chunks.reserve(store_.rows().size());
+        for (const auto &row : store_.rows()) {
+            compacs::rag::RagChunk chunk;
+            chunk.id = row.id;
+            chunk.source = row.source;
+            chunk.page = row.page;
+            chunk.text = row.text;
+            chunk.embedding = &row.embedding;
+            chunks.push_back(std::move(chunk));
+        }
+        pipeline_.set_chunks(std::move(chunks), lemmas_.loaded() ? &lemmas_ : nullptr);
+    }
 
     std::size_t chunk_count() const { return store_.size(); }
     std::size_t embedding_dim() const { return store_.dim(); }
@@ -791,8 +825,12 @@ public:
             return;
         }
 
-        auto hits = search_vectors(store_, embedding, llama_.top_k, llama_.similarity_threshold);
-        if (hits.empty()) {
+        auto rag_hits = pipeline_.retrieve(
+            embedding,
+            question,
+            lemmas_.loaded() ? &lemmas_ : nullptr,
+            llama_.pipeline_config());
+        if (rag_hits.empty()) {
             result.answer = llama_.prompt_not_found;
             if (on_token) {
                 on_token(result.answer);
@@ -800,6 +838,18 @@ public:
             result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
             on_done(result);
             return;
+        }
+
+        std::vector<ChunkHit> hits;
+        hits.reserve(rag_hits.size());
+        for (const auto &rh : rag_hits) {
+            ChunkHit hit;
+            hit.id = rh.id;
+            hit.source = rh.source;
+            hit.page = rh.page;
+            hit.text = rh.text;
+            hit.score = rh.score;
+            hits.push_back(std::move(hit));
         }
 
         const std::size_t limit = std::min(llama_.context_chunks, hits.size());
@@ -856,6 +906,8 @@ private:
     VectorStore store_;
     LlamaConfig llama_;
     LlamaClient client_;
+    compacs::rag::LemmaMap lemmas_;
+    compacs::rag::RagPipeline pipeline_;
     std::string load_error_;
 };
 
@@ -1129,6 +1181,95 @@ bool load_vector_store(VectorStore *store, const std::string &vector_store_rel, 
     return false;
 }
 
+bool has_cli_flag(int argc, char *argv[], const char *flag) {
+    for (int i = 1; i < argc; ++i) {
+        if (argv[i] && std::string(argv[i]) == flag) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::optional<std::string> cli_arg_value(int argc, char *argv[], const char *key) {
+    const std::string prefix = std::string(key) + "=";
+    for (int i = 1; i < argc; ++i) {
+        if (!argv[i]) {
+            continue;
+        }
+        const std::string arg = argv[i];
+        if (arg == key && i + 1 < argc) {
+            return std::string(argv[i + 1]);
+        }
+        if (arg.rfind(prefix, 0) == 0) {
+            return arg.substr(prefix.size());
+        }
+    }
+    return std::nullopt;
+}
+
+void print_ask_result(const AskResult &result) {
+    if (!result.error.empty()) {
+        std::cerr << "ERROR: " << result.error << "\n";
+    }
+    if (!result.answer.empty()) {
+        std::cout << result.answer << "\n";
+    }
+    if (!result.sources.empty()) {
+        std::cout << "\nИсточники:\n";
+        for (const auto &src : result.sources) {
+            std::cout << "- " << src.source << ", стр. " << src.page << "\n";
+        }
+    }
+    std::cout << "(" << static_cast<int>(result.ms) << " ms)\n";
+}
+
+std::string trim_ascii(std::string s) {
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front()))) {
+        s.erase(s.begin());
+    }
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) {
+        s.pop_back();
+    }
+    return s;
+}
+
+int run_console_mode(RagController &controller) {
+    std::cout << "COMPACS RAG console. Введите вопрос (пустая строка = выход).\n";
+    std::string line;
+    while (true) {
+        std::cout << "> " << std::flush;
+        if (!std::getline(std::cin, line)) {
+            break;
+        }
+        const auto question = trim_ascii(line);
+        if (question.empty()) {
+            break;
+        }
+        const auto result = controller.ask(question);
+        print_ask_result(result);
+        std::cout << "\n";
+    }
+    return 0;
+}
+
+bool load_lemma_map(compacs::rag::LemmaMap *lemmas, const std::filesystem::path &exe_dir,
+                    const std::string &rel_path) {
+    const std::filesystem::path configured(rel_path);
+    const auto candidates = {
+        configured.is_absolute() ? configured : (exe_dir / configured),
+        exe_dir / "lemma_map.tsv",
+    };
+    for (const auto &path : candidates) {
+        std::string err;
+        if (std::filesystem::exists(path) && lemmas->load_file(path, &err)) {
+            std::cout << "lemma_map: " << lemmas->size() << " forms from " << path.string() << "\n";
+            return true;
+        }
+    }
+    std::cerr << "WARNING: lemma_map not found — BM25 normalization disabled\n";
+    return false;
+}
+
 }  // namespace
 
 int main(int argc, char *argv[]) {
@@ -1150,7 +1291,21 @@ int main(int argc, char *argv[]) {
     }
 
     const LlamaConfig llama_cfg = LlamaConfig::from_app(app_cfg);
-    RagController controller(std::move(store), llama_cfg);
+
+    compacs::rag::LemmaMap lemmas;
+    load_lemma_map(&lemmas, exe_dir, app_cfg.lemma_map);
+
+    RagController controller(std::move(store), llama_cfg, std::move(lemmas));
+
+    if (const auto one_shot = cli_arg_value(argc, argv, "-q")) {
+        const auto result = controller.ask(*one_shot);
+        print_ask_result(result);
+        return result.error.empty() ? 0 : 1;
+    }
+
+    if (has_cli_flag(argc, argv, "--console")) {
+        return run_console_mode(controller);
+    }
 
     const int api_port = app_cfg.ui_port;
 

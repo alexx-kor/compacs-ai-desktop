@@ -93,12 +93,18 @@ if(WIN32)
   )
 endif()
 
-# Copy UI assets next to the executable.
+# Copy UI assets and runtime files next to the executable.
 add_custom_command(TARGET main POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:main>/assets"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/index.html"
     "$<TARGET_FILE_DIR:main>/assets/index.html"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/config.yaml"
+    "$<TARGET_FILE_DIR:main>/config.yaml"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/lemma_map.tsv"
+    "$<TARGET_FILE_DIR:main>/lemma_map.tsv"
 )
 
 install(TARGETS main RUNTIME DESTINATION bin)

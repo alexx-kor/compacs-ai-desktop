@@ -9,8 +9,8 @@ $Stage = Join-Path $Dist "_stage"
 Write-Host "Root: $Root"
 Write-Host "Cleaning dist stage..."
 
-if (Test-Path $Dist) {
-    Remove-Item $Dist -Recurse -Force
+if (Test-Path $Stage) {
+    Remove-Item $Stage -Recurse -Force
 }
 New-Item -ItemType Directory -Path $Stage -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $Stage "Part1") -Force | Out-Null
@@ -46,6 +46,19 @@ Copy-Item (Join-Path $Root "llama") (Join-Path $Part1 "llama") -Recurse -Force
 Copy-Item (Join-Path $Root "README.md") $Part1 -Force
 Copy-Item (Join-Path $Root "ASSEMBLE.md") $Part1 -Force
 Copy-Item (Join-Path $Root "STOP.cmd") $Part1 -Force
+Copy-Item (Join-Path $Root "START.cmd") $Part1 -Force
+Copy-Item (Join-Path $Root "START_UI.cmd") $Part1 -Force
+Copy-Item (Join-Path $Root "RUN.cmd") $Part1 -Force
+
+foreach ($extra in @("lemma_map.tsv", "RAG_ARCHITECTURE.md", "qa_evaluation.json", "qa_evaluation.csv")) {
+    $src = Join-Path $Release $extra
+    if (-not (Test-Path $src)) { $src = Join-Path $Root $extra }
+    if (Test-Path $src) {
+        Copy-Item $src $Part1 -Force
+    } else {
+        Write-Host "  (skip missing $extra)"
+    }
+}
 
 New-Item -ItemType Directory -Path (Join-Path $Part1 "models") -Force | Out-Null
 @"
@@ -56,39 +69,6 @@ Place model files from Part2 and Part3 into this folder:
 
 See ASSEMBLE.md
 "@ | Set-Content -Path (Join-Path $Part1 "models\README.txt") -Encoding UTF8
-
-@"
-@echo off
-setlocal EnableExtensions
-cd /d "%~dp0"
-title COMPACS RAG Desktop
-
-if not exist "main.exe" (
-  echo ERROR: main.exe not found in %CD%
-  pause
-  exit /b 1
-)
-if not exist "llama\llama-server.exe" (
-  echo ERROR: missing llama\llama-server.exe
-  pause
-  exit /b 1
-)
-if not exist "models\llama3.2-3b-instruct-q4_K_M.gguf" (
-  echo ERROR: missing models\llama3.2-3b-instruct-q4_K_M.gguf — unpack Part2 here
-  pause
-  exit /b 1
-)
-if not exist "models\nomic-embed-text.gguf" (
-  echo ERROR: missing models\nomic-embed-text.gguf — unpack Part3 here
-  pause
-  exit /b 1
-)
-
-echo Starting COMPACS RAG Desktop...
-echo Ensure llama-server is running on 127.0.0.1:8081
-start "" /D "%CD%" "main.exe"
-goto :eof
-"@ | Set-Content -Path (Join-Path $Part1 "START.cmd") -Encoding ASCII
 
 Write-Host "Staging Part2 (Chat model)..."
 Copy-Item (Join-Path $Root "models\llama3.2-3b-instruct-q4_K_M.gguf") (Join-Path $Stage "Part2\models\") -Force
@@ -116,11 +96,10 @@ Zip-Folder (Join-Path $Stage "Part2") $zip2
 Zip-Folder (Join-Path $Stage "Part3") $zip3
 
 Copy-Item (Join-Path $Root "ASSEMBLE.md") (Join-Path $Dist "ASSEMBLE.md") -Force
+Copy-Item (Join-Path $Root "RAG_ARCHITECTURE.md") (Join-Path $Dist "RAG_ARCHITECTURE.md") -Force
 
 Write-Host ""
 Write-Host "Done. Output in: $Dist"
 Get-ChildItem $Dist -Filter "*.zip" | ForEach-Object {
     "{0,-45} {1,10:N1} MB" -f $_.Name, ($_.Length / 1MB)
 }
-Write-Host ""
-Write-Host "Stage folders left under dist\_stage (optional cleanup)."

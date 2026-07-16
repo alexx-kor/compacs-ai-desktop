@@ -39,32 +39,48 @@ struct AppConfig {
     ConfigSource src_timeout_completion = ConfigSource::Default;
     ConfigSource src_timeout_embed = ConfigSource::Default;
 
-    // --- retrieval (code defaults = current desktop) ---
+    // --- retrieval (hybrid_dense_3b_cpu profile) ---
     std::string vector_store = "vectors.bin";
-    std::size_t top_k = 6;
-    double similarity_threshold = 0.7;  // cosine distance: keep if distance < threshold
+    std::string lemma_map = "lemma_map.tsv";
+    std::size_t top_k = 12;
+    std::size_t rerank_top_k = 8;
+    double similarity_threshold = 0.30;
     std::size_t context_chunks = 6;
-    std::size_t chunk_chars = 1200;
+    std::size_t chunk_chars = 800;
     std::size_t query_max_chars = 2048;
+    bool hybrid_enabled = true;
+    bool rerank_enabled = true;
+    bool collection_routing_enabled = true;
+    bool map_reduce_enabled = false;
+    std::size_t map_reduce_max_chunks = 6;
+    std::size_t map_chunk_chars = 400;
+    int map_num_predict = 120;
     ConfigSource src_vector_store = ConfigSource::Default;
+    ConfigSource src_lemma_map = ConfigSource::Default;
     ConfigSource src_top_k = ConfigSource::Default;
+    ConfigSource src_rerank_top_k = ConfigSource::Default;
     ConfigSource src_similarity_threshold = ConfigSource::Default;
     ConfigSource src_context_chunks = ConfigSource::Default;
     ConfigSource src_chunk_chars = ConfigSource::Default;
     ConfigSource src_query_max_chars = ConfigSource::Default;
+    ConfigSource src_hybrid_enabled = ConfigSource::Default;
+    ConfigSource src_rerank_enabled = ConfigSource::Default;
+    ConfigSource src_collection_routing_enabled = ConfigSource::Default;
+    ConfigSource src_map_reduce_enabled = ConfigSource::Default;
 
     // --- generation ---
     double temperature = 0.1;
-    int num_predict = 512;
-    int num_ctx = 8192;  // reserved
+    int num_predict = 250;
+    int num_ctx = 16384;  // reserved (launcher -c)
     ConfigSource src_temperature = ConfigSource::Default;
     ConfigSource src_num_predict = ConfigSource::Default;
 
     // --- prompt ---
     std::string prompt_system =
-        "Отвечай ТОЛЬКО по фрагментам контекста ниже и только на русском языке. "
-        "Если в контексте нет ответа — напиши ровно: NOT FOUND in documentation. "
-        "Не выдумывай факты. В конце ответа кратко укажи источники (файл и страница), если они есть.\n\n";
+        "Отвечай ТОЛЬКО по фрагментам контекста ниже и только на русском языке.\n"
+        "Структурируй ответ кратко: 2–5 предложений по сути вопроса.\n"
+        "Если в контексте нет ответа — напиши ровно: NOT FOUND in documentation.\n"
+        "Не выдумывай факты. В конце укажи источники: файл и страница.\n\n";
     std::string prompt_not_found = "NOT FOUND in documentation";
     ConfigSource src_prompt_system = ConfigSource::Default;
     ConfigSource src_prompt_not_found = ConfigSource::Default;

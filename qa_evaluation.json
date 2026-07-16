@@ -1,0 +1,138 @@
+{
+  "timestamp": "2026-07-16T09:38:25",
+  "mode": "fast_direct (embed:8081 + completion:8082, no map-reduce)",
+  "profile": {
+    "retrieval": {
+      "top_k": 12,
+      "thr": 0.3,
+      "ctx": 6,
+      "hybrid": "dense",
+      "dense_w": 0.65,
+      "bm25_w": 0.2,
+      "rrf_w": 0.15,
+      "bm25_k1": 1.2,
+      "bm25_b": 0.75
+    },
+    "generation": {
+      "chars": 800,
+      "temp": 0.1,
+      "np": 250
+    }
+  },
+  "scoring": "retrieval*0.35 + answer*0.65 (tune_hybrid.py)",
+  "overall_quality_percent": 55.2,
+  "avg_quality_percent": 55.2,
+  "overall_combined_score": 37.54,
+  "baseline_tune_winner_percent": 69.6,
+  "note": "0.55 в прошлых прогонах — это similarity_threshold (cosine distance), не % качества. Победитель tune_hybrid: combined 47.44 / 68 ≈ 70%.",
+  "items": [
+    {
+      "question": "Что показывает экран Монитор?",
+      "answer": "Экран Монитор представляет результаты диагностики и мониторинга технического состояния объектов диагностики, включая их остаточный ресурс и предписания персоналу о ближайших неотложных действиях для их безаварийной и ресурсосберегающей эксплуатации.",
+      "sources_pages": [
+        304,
+        309,
+        285,
+        296,
+        86,
+        276
+      ],
+      "golden_pages": [
+        86
+      ],
+      "golden_page_hit": true,
+      "retrieval_score": 11.4,
+      "answer_score": 15.0,
+      "combined_score": 13.74,
+      "quality_percent": 80.8,
+      "latency_ms": 52586.1,
+      "wall_ms": 53177.4,
+      "error": ""
+    },
+    {
+      "question": "Как запустить графический терминал КОМПАКС?",
+      "answer": "NOT FOUND in documentation.",
+      "sources_pages": [
+        108,
+        88,
+        92,
+        1,
+        33,
+        44
+      ],
+      "golden_pages": [
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65
+      ],
+      "golden_page_hit": false,
+      "retrieval_score": 0.5,
+      "answer_score": 2.0,
+      "combined_score": 1.48,
+      "quality_percent": 8.7,
+      "latency_ms": 22985.6,
+      "wall_ms": 23608.5,
+      "error": ""
+    },
+    {
+      "question": "Как синхронизировать данные прибора?",
+      "answer": "Синхронизировать данные прибора можно, нажав на кнопку «Синхронизация» на изображении прибора, что открывает окно «Синхронизация данных», в котором можно синхронизировать конфигурацию и текущее время прибора с системой, а также загрузить результаты измерений в систему.",
+      "sources_pages": [
+        173,
+        91,
+        175,
+        399,
+        68,
+        251
+      ],
+      "golden_pages": [
+        91
+      ],
+      "golden_page_hit": true,
+      "retrieval_score": 13.5,
+      "answer_score": 13.0,
+      "combined_score": 13.18,
+      "quality_percent": 77.5,
+      "latency_ms": 71345.6,
+      "wall_ms": 71943.3,
+      "error": ""
+    },
+    {
+      "question": "Что такое панель адреса текущего субъекта?",
+      "answer": "Панель адреса текущего субъекта — это элемент системы, который отображает информацию о текущем субъекте диагностики.",
+      "sources_pages": [
+        1,
+        154,
+        1,
+        90,
+        113,
+        95
+      ],
+      "golden_pages": [
+        87,
+        88
+      ],
+      "golden_page_hit": false,
+      "retrieval_score": 2.0,
+      "answer_score": 13.0,
+      "combined_score": 9.15,
+      "quality_percent": 53.8,
+      "latency_ms": 36093.7,
+      "wall_ms": 36581.6,
+      "error": ""
+    }
+  ]
+}

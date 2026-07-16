@@ -1,23 +1,20 @@
 # COMPACS Desktop — runtime config (env > this file > code defaults).
-# Priority: COMPACS_* env vars override YAML. No secrets — offline desktop only.
+# Profile: hybrid_dense_3b_cpu + rerank + collection routing + map-reduce.
+# Latency: chunk_chars 800; context_chunks 6; top_k 12 retrieve pool.
 #
 # similarity_threshold: cosine DISTANCE (1 - similarity). Keep hit if distance < threshold.
-# Same semantics as mcp-layer json_store / _similarity.py and ClickHouse cosineDistance.
-# Stand config.yml value 0.35 maps 1:1 (no conversion): distance < 0.35 ⇔ similarity > 0.65.
-# Desktop code default without YAML is still 0.7 (looser).
+# Tuned 0.30 (wider pool; BM25 pulls lexical matches). Stand default was 0.35.
 
 models:
-  # reserved: not read by main.cpp, used by launcher
+  # Drop-in swap: put GGUF in models/ and change generator filename.
+  # Candidates for A/B (~1.8–2.0 GB Q4): Qwen2.5-3B-Instruct, Phi-3-mini-4k-instruct
   generator: models/llama3.2-3b-instruct-q4_K_M.gguf
   embedder: models/nomic-embed-text.gguf
-  # API model id for /v1/embeddings (read by main.cpp)
   embed_model: nomic-embed-text
 
 server:
   host: 127.0.0.1
-  # legacy single-URL field (log); desktop uses embed_port + gen_port
   port: 8081
-  # dual-channel llama-server (offline desktop)
   gen_port: 8082
   embed_port: 8081
   timeouts:
@@ -27,33 +24,37 @@ server:
 
 retrieval:
   vector_store: vectors.bin
-  # stand-aligned (mcp-layer config.yml rag.top_k)
+  lemma_map: lemma_map.tsv
+  hybrid_enabled: true
+  rerank_enabled: true
+  collection_routing_enabled: true
+  map_reduce_enabled: false
+  # retrieve pool → rerank → context_chunks
   top_k: 12
-  # cosine distance; start 0.55 (raise toward 0.7 if too many empty hits)
-  similarity_threshold: 0.55
-  # full chunk text into prompt (stored avg ~1335 chars)
-  # on CPU desktop keep context_chunks at 3 to avoid multi-minute TTFT with 6×1400
-  context_chunks: 3
-  chunk_chars: 1400
+  rerank_top_k: 8
+  similarity_threshold: 0.30
+  context_chunks: 6
+  chunk_chars: 800
   query_max_chars: 2048
+  map_reduce_max_chunks: 6
+  map_chunk_chars: 400
+  map_num_predict: 120
 
 generation:
   temperature: 0.1
-  # shorter answers keep CPU latency acceptable
-  num_predict: 256
-  # reserved: not read by main.cpp, used by launcher (-c)
-  num_ctx: 8192
+  num_predict: 250
+  num_ctx: 16384
 
 prompt:
   system: |
     Отвечай ТОЛЬКО по фрагментам контекста ниже и только на русском языке.
+    Структурируй ответ кратко: 2–5 предложений по сути вопроса.
     Если в контексте нет ответа — напиши ровно: NOT FOUND in documentation.
-    Не выдумывай факты. В конце ответа кратко укажи источники (файл и страница), если они есть.
+    Не выдумывай факты. В конце укажи источники: файл и страница.
 
   not_found: NOT FOUND in documentation
 
 ui:
-  # host is fixed to 127.0.0.1 in code (not configurable)
   port: 8765
   title: COMPACS RAG
   width: 1024

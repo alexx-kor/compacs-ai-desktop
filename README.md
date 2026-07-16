@@ -1,27 +1,25 @@
 # COMPACS RAG Desktop
 
-Автономное настольное приложение (Windows) для ответов по документации.
-Работает офлайн: векторная база `vectors.bin` (формат COMPACS1) + локальный
-`llama-server`. Без Python runtime, Docker, Ollama и внешних API.
+Автономное настольное приложение (Windows) для ответов по документации COMPACS.
+Профиль **hybrid_dense_3b_cpu**: dense + BM25 + RRF, rerank, collection routing.
+Работает офлайн: `vectors.bin` (COMPACS1, 2272 чанка) + два `llama-server` (embed :8081, chat :8082).
 
-## Быстрый старт (готовая сборка)
+## Быстрый старт (готовый комплект)
 
-1. Соберите проект (`build.bat`) или возьмите уже собранный `build\Release\`.
-2. Рядом с `main.exe` должны лежать:
-   - `config.yaml`
-   - `vectors.bin` (COMPACS1)
-   - `assets\index.html`
-3. Запустите `llama-server` на `127.0.0.1:8081` (embed + completion в одном процессе).
-4. Запустите **`build\Release\main.exe`**.
-5. Откроется окно **COMPACS RAG**. В статус-баре должно быть число чанков и URL llama.
-6. Задайте вопрос («Спросить»). UI также доступен в браузере: http://127.0.0.1:8765
+1. Распакуйте Part1–Part3 по **[ASSEMBLE.md](ASSEMBLE.md)**.
+2. Запустите **`START.cmd`** — поднимет llama на 8081/8082 и откроет консольный RAG.
+3. Введите вопрос после `> `.
+4. **WebView UI** (опционально): `START_UI.cmd` → http://127.0.0.1:8765
 
-Остановка: закройте окно приложения. Скрипт `STOP.cmd` — для остановки связанных процессов (если используете).
+Остановка: `STOP.cmd`.
 
 ### Раздача частями (< 2 ГБ)
 
-Из‑за размера GGUF комплект делится на 3 архива. Инструкция: **[ASSEMBLE.md](ASSEMBLE.md)**.  
-Упаковка: `powershell -ExecutionPolicy Bypass -File .\pack_parts.ps1` → папка `dist\`.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\pack_parts.ps1
+```
+
+Результат в `dist\`: Part1 (приложение) + Part2 (чат-модель) + Part3 (эмбеддер).
 
 ## Сборка из исходников
 
@@ -29,132 +27,82 @@
 build.bat
 ```
 
-Артефакты:
+Артефакты в `build\Release\`:
 
 | Файл | Назначение |
 |------|------------|
-| `build\Release\main.exe` | Desktop: WebView UI + локальный HTTP API + RAG |
-| `build\Release\export_vectors.exe` | Конвертер `chunks.json` → `vectors.bin` (COMPACS1) |
+| `main.exe` | RAG + опционально WebView UI (:8765) |
+| `export_vectors.exe` | Конвертер `chunks.json` / `--from-rag` → COMPACS1 |
 
-Требования для сборки:
+Рядом с exe после сборки копируются `config.yaml`, `lemma_map.tsv`, `assets\`.
 
-- Visual Studio 2022 Build Tools (x64)
-- CMake (из VS)
-- WebView2 SDK в `.tools\mswebview2` (или `COMPACS_WEBVIEW2_DIR`)
+## Режимы запуска
 
-## Состав репозитория / рабочей папки
+| Команда | Описание |
+|---------|----------|
+| `START.cmd` | llama :8081/:8082 + `main.exe --console` |
+| `START_UI.cmd` | llama + WebView UI |
+| `main.exe --console` | Консольный RAG (llama уже запущен) |
+| `main.exe -q "вопрос"` | Один вопрос в stdout |
 
-| Путь | Назначение |
-|------|------------|
-| `main.cpp`, `config.cpp` / `config.hpp` | Приложение и runtime-конфиг |
-| `format_vectors.hpp` | Единая схема формата COMPACS1 (reader + writer) |
-| `tools\export_vectors\` | Утилита экспорта векторов |
-| `assets\index.html` | UI (fetch к локальному API) |
-| `config.yaml` | Шаблон runtime-конфига (копируется рядом с exe) |
-| `chunks.json` | Исходные чанки + embeddings (не в git) |
-| `build\Release\` | Собранные exe и runtime-комплект |
-| `llama\` | Движок llama.cpp (`llama-server.exe` + DLL) — не в git |
-| `models\` | GGUF-модели — не в git |
-| `build.bat` | Configure + Release build |
+## Архитектура RAG
+
+См. **[RAG_ARCHITECTURE.md](RAG_ARCHITECTURE.md)**.
+
+Кратко: вопрос → collection routing → embed (:8081) → hybrid retrieve (dense+BM25+RRF, top 12) → lexical rerank (top 8) → 6 чанков × 800 символов → Llama 3 chat (:8082).
 
 ## Конфигурация (`config.yaml`)
 
-Приоритет: **env > YAML > значения по умолчанию в коде**.
+Приоритет: **env > YAML > код**.
 
-Основные ключи:
+Ключевые параметры профиля:
 
-| Ключ | Смысл (шаблон) |
-|------|----------------|
-| `server.port` | **8081** — рабочий порт llama-server (embed+completion) |
-| `server.gen_port` / `embed_port` | reserved (8082 / 8081), launcher |
-| `ui.port` | **8765** — локальный UI/API (`127.0.0.1`, host не меняется) |
-| `retrieval.vector_store` | путь к `vectors.bin` относительно exe |
-| `retrieval.similarity_threshold` | cosine **distance** (keep if distance < threshold) |
+| Ключ | Значение |
+|------|----------|
+| `retrieval.hybrid_enabled` | true |
+| `retrieval.top_k` / `rerank_top_k` | 12 / 8 |
+| `retrieval.context_chunks` / `chunk_chars` | 6 / 800 |
+| `retrieval.similarity_threshold` | 0.30 (cosine distance) |
+| `generation.num_ctx` | 16384 (для START.cmd) |
+| `server.embed_port` / `gen_port` | 8081 / 8082 |
 
-Переопределение через env:
-
-- `COMPACS_LLAMA_SERVER_URL` (например `http://127.0.0.1:8081`)
-- `COMPACS_EMBED_MODEL`
-- `COMPACS_UI_PORT`
-
-При первом запуске без `config.yaml` рядом с exe создаётся starter-файл (stand-aligned значения); **текущая сессия** всё равно использует code defaults до рестарта.
-
-В логе при старте печатается блок `=== COMPACS config (effective) ===`.
-
-## Порты (localhost)
+## Порты
 
 | Порт | Сервис |
 |------|--------|
-| **8765** | UI + API `main.exe` (`/health`, `/api/info`, `/api/ask`) |
-| **8081** | llama-server (embedding + completion) |
+| 8081 | llama embed (`nomic-embed-text.gguf`) |
+| 8082 | llama chat (`llama3.2-3b-instruct-q4_K_M.gguf`) |
+| 8765 | UI/API `main.exe` (только START_UI) |
 
-`gen_port` / `embed_port` в YAML — reserved под launcher; текущий `main.exe` ходит на `server.host`:`server.port`.
+## Векторная база
 
-## Векторная база (COMPACS1)
-
-Формат описан в `format_vectors.hpp` / читается в `main.cpp`:
-
-- magic `"COMPACS1"`, version `1`, dim обычно **768**, float32 LE
-- записи: `id`, `page`, `source`/`text` (UTF-8) + embedding
-
-Конвертация из `chunks.json` (поле `chunk` или `text` + `embedding`):
+- Формат COMPACS1: magic `COMPACS1`, dim 768, float32 — см. `format_vectors.hpp`.
+- Полный индекс: **2272** чанка, 14 источников (`1_OG_1`, `2_OG_1`, `3_OG_1`).
 
 ```bat
-build\Release\export_vectors.exe chunks.json build\Release\vectors.bin
+build\Release\export_vectors.exe --from-rag rag build\Release\vectors.bin
 ```
 
-Статистика: число записей, dim, размер файла. При `embedding` ≠ 768 — ошибка с номером строки, без пропуска.
-
-`rag\vectors.bin` (magic `RAGVEC01`) — формат стенда/mcp-layer; desktop его **не** читает.
-
-Текущий экспорт из `chunks.json`: **131** чанк, dim **768**.
-
-## Как это работает
-
-1. UI (`assets\index.html`) обращается к `http://127.0.0.1:<ui.port>` (`window.COMPACS_API_BASE`).
-2. Вопрос → эмбеддинг через llama-server на `server.port`.
-3. Косинусный поиск по `vectors.bin` → топ чанков по `similarity_threshold`.
-4. Контекст + вопрос → `/completion` на том же llama-server → ответ (+ sources).
-
-## API (для проверки)
+## API
 
 ```bat
 curl http://127.0.0.1:8765/health
 curl http://127.0.0.1:8765/api/info
-curl -X POST http://127.0.0.1:8765/api/ask -H "Content-Type: application/json" --data-binary @ask.json
+curl -X POST http://127.0.0.1:8765/api/ask -H "Content-Type: application/json" -d "{\"question\":\"Что показывает экран Монитор?\",\"stream\":false}"
 ```
-
-Пример `ask.json`:
-
-```json
-{"question":"Что показывает экран Монитор?","stream":false}
-```
-
-## Параллельно со стендом
-
-| Сервис | Порт |
-|--------|------|
-| RAG gateway (стенд) | 3080 |
-| RAG engine (стенд) | 8080 |
-| llama-server (desktop) | **8081** |
-| desktop UI/API | **8765** |
-
-Десктоп не занимает 8080/3080 — конфликта со стендом нет.
 
 ## Диагностика
 
-| Симптом | Причина | Решение |
-|---------|---------|---------|
-| `null/api/ask` / «API недоступен» | UI не на HTTP (`file://`) или старый exe | Запускать `build\Release\main.exe`, не открывать `index.html` как файл |
-| `invalid vectors magic` | Файл не COMPACS1 (например `RAGVEC01`) | Пересобрать через `export_vectors.exe` из `chunks.json` |
-| `vector store is empty` | Нет / пустой `vectors.bin` рядом с exe | Скопировать/экспортировать `vectors.bin` в `build\Release\` |
-| embed / ask зависает | llama-server на 8081 не отвечает | Перезапустить llama-server; проверить `llama_base_url` в effective config |
-| Окно не открывается | Нет WebView2 | Установить WebView2 Runtime |
-| Порт 8765 занят | Предыдущий `main.exe` | Закрыть процесс или сменить `ui.port` / `COMPACS_UI_PORT` |
+| Симптом | Решение |
+|---------|---------|
+| `lemma_map not found` | Скопировать `lemma_map.tsv` рядом с exe |
+| embed / ask зависает | `STOP.cmd`, затем `START.cmd` |
+| `invalid vectors magic` | Пересобрать через `export_vectors.exe` |
+| Пустые ответы | Проверить llama :8081 и :8082 (`/health`) |
 
-## Требования (runtime)
+## Требования
 
 - Windows 10/11 x64
-- WebView2 Runtime (обычно с Microsoft Edge)
-- Запущенный `llama-server` на порту из `config.yaml` (`server.port`, по умолчанию шаблона — 8081)
-- Модели GGUF рядом с llama-server (см. `models\` в шаблоне конфига)
+- WebView2 Runtime (для START_UI)
+- VS 2022 Build Tools + CMake (для сборки)
+- ~2.5 ГБ на диске (модели + индекс)

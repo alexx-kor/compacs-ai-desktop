@@ -213,6 +213,22 @@ void apply_string(const YamlMap &m, const char *key, std::string *dst, ConfigSou
     *src = ConfigSource::Yaml;
 }
 
+void apply_bool(const YamlMap &m, const char *key, bool *dst, ConfigSource *src, bool code_default) {
+    if (!has_key(m, key)) {
+        log_missing(key, code_default ? "true" : "false");
+        return;
+    }
+    const auto &v = m.at(key);
+    if (v == "true" || v == "1" || v == "yes") {
+        *dst = true;
+    } else if (v == "false" || v == "0" || v == "no") {
+        *dst = false;
+    } else {
+        throw ParseError(std::string("invalid boolean for ") + key + ": " + v);
+    }
+    *src = ConfigSource::Yaml;
+}
+
 std::string getenv_or(const char *name) {
     if (const char *value = std::getenv(name); value && value[0] != '\0') {
         return value;
@@ -272,12 +288,29 @@ void apply_yaml_map(const YamlMap &m, AppConfig *cfg) {
               code.timeout_embed_read_sec);
 
     apply_string(m, "retrieval.vector_store", &cfg->vector_store, &cfg->src_vector_store, code.vector_store);
+    apply_string(m, "retrieval.lemma_map", &cfg->lemma_map, &cfg->src_lemma_map, code.lemma_map);
     apply_int(m, "retrieval.top_k", &cfg->top_k, &cfg->src_top_k, code.top_k);
+    apply_int(m, "retrieval.rerank_top_k", &cfg->rerank_top_k, &cfg->src_rerank_top_k, code.rerank_top_k);
     apply_double(m, "retrieval.similarity_threshold", &cfg->similarity_threshold, &cfg->src_similarity_threshold,
                  code.similarity_threshold);
     apply_int(m, "retrieval.context_chunks", &cfg->context_chunks, &cfg->src_context_chunks, code.context_chunks);
     apply_int(m, "retrieval.chunk_chars", &cfg->chunk_chars, &cfg->src_chunk_chars, code.chunk_chars);
     apply_int(m, "retrieval.query_max_chars", &cfg->query_max_chars, &cfg->src_query_max_chars, code.query_max_chars);
+    apply_bool(m, "retrieval.hybrid_enabled", &cfg->hybrid_enabled, &cfg->src_hybrid_enabled, code.hybrid_enabled);
+    apply_bool(m, "retrieval.rerank_enabled", &cfg->rerank_enabled, &cfg->src_rerank_enabled, code.rerank_enabled);
+    apply_bool(m, "retrieval.collection_routing_enabled", &cfg->collection_routing_enabled,
+               &cfg->src_collection_routing_enabled, code.collection_routing_enabled);
+    apply_bool(m, "retrieval.map_reduce_enabled", &cfg->map_reduce_enabled, &cfg->src_map_reduce_enabled,
+               code.map_reduce_enabled);
+    if (has_key(m, "retrieval.map_reduce_max_chunks")) {
+        cfg->map_reduce_max_chunks = static_cast<std::size_t>(std::stoll(m.at("retrieval.map_reduce_max_chunks")));
+    }
+    if (has_key(m, "retrieval.map_chunk_chars")) {
+        cfg->map_chunk_chars = static_cast<std::size_t>(std::stoll(m.at("retrieval.map_chunk_chars")));
+    }
+    if (has_key(m, "retrieval.map_num_predict")) {
+        cfg->map_num_predict = std::stoi(m.at("retrieval.map_num_predict"));
+    }
 
     apply_double(m, "generation.temperature", &cfg->temperature, &cfg->src_temperature, code.temperature);
     apply_int(m, "generation.num_predict", &cfg->num_predict, &cfg->src_num_predict, code.num_predict);
@@ -350,11 +383,21 @@ void AppConfig::log_effective(std::ostream &out) const {
     out << "  server.gen_port = " << server_gen_port << " (" << to_string(src_gen_port) << ")\n";
     out << "  server.embed_port = " << server_embed_port << " (" << to_string(src_embed_port) << ")\n";
     out << "  retrieval.vector_store = " << vector_store << " (" << to_string(src_vector_store) << ")\n";
+    out << "  retrieval.lemma_map = " << lemma_map << " (" << to_string(src_lemma_map) << ")\n";
     out << "  retrieval.top_k = " << top_k << " (" << to_string(src_top_k) << ")\n";
+    out << "  retrieval.rerank_top_k = " << rerank_top_k << " (" << to_string(src_rerank_top_k) << ")\n";
     out << "  retrieval.similarity_threshold = " << similarity_threshold << " ("
         << to_string(src_similarity_threshold) << ")  # cosine distance, keep if distance < threshold\n";
     out << "  retrieval.context_chunks = " << context_chunks << " (" << to_string(src_context_chunks) << ")\n";
     out << "  retrieval.chunk_chars = " << chunk_chars << " (" << to_string(src_chunk_chars) << ")\n";
+    out << "  retrieval.hybrid_enabled = " << (hybrid_enabled ? "true" : "false") << " ("
+        << to_string(src_hybrid_enabled) << ")\n";
+    out << "  retrieval.rerank_enabled = " << (rerank_enabled ? "true" : "false") << " ("
+        << to_string(src_rerank_enabled) << ")\n";
+    out << "  retrieval.collection_routing_enabled = " << (collection_routing_enabled ? "true" : "false") << " ("
+        << to_string(src_collection_routing_enabled) << ")\n";
+    out << "  retrieval.map_reduce_enabled = " << (map_reduce_enabled ? "true" : "false") << " ("
+        << to_string(src_map_reduce_enabled) << ")\n";
     out << "  generation.temperature = " << temperature << " (" << to_string(src_temperature) << ")\n";
     out << "  generation.num_predict = " << num_predict << " (" << to_string(src_num_predict) << ")\n";
     out << "  generation.num_ctx = " << num_ctx << " (reserved)\n";
@@ -382,25 +425,16 @@ bool write_starter_config_yaml(const std::filesystem::path &path, std::string *e
         return false;
     }
     out << R"yaml(# COMPACS Desktop — runtime config (env > this file > code defaults).
-# Priority: COMPACS_* env vars override YAML. No secrets — offline desktop only.
-#
-# similarity_threshold: cosine DISTANCE (1 - similarity). Keep hit if distance < threshold.
-# Same semantics as mcp-layer json_store / _similarity.py and ClickHouse cosineDistance.
-# Stand config.yml value 0.35 maps 1:1 (no conversion): distance < 0.35 ⇔ similarity > 0.65.
-# Desktop code default without YAML is still 0.7 (looser).
+# Profile: hybrid_dense_3b_cpu + rerank + collection routing.
 
 models:
-  # reserved: not read by main.cpp, used by launcher
   generator: models/llama3.2-3b-instruct-q4_K_M.gguf
   embedder: models/nomic-embed-text.gguf
-  # API model id for /v1/embeddings (read by main.cpp)
   embed_model: nomic-embed-text
 
 server:
   host: 127.0.0.1
-  # legacy single-URL field (log); desktop uses embed_port + gen_port
   port: 8081
-  # dual-channel llama-server (offline desktop)
   gen_port: 8082
   embed_port: 8081
   timeouts:
@@ -410,33 +444,33 @@ server:
 
 retrieval:
   vector_store: vectors.bin
-  # stand-aligned (mcp-layer config.yml rag.top_k)
+  lemma_map: lemma_map.tsv
+  hybrid_enabled: true
+  rerank_enabled: true
+  collection_routing_enabled: true
+  map_reduce_enabled: false
   top_k: 12
-  # cosine distance; start 0.55 (raise toward 0.7 if too many empty hits)
-  similarity_threshold: 0.55
-  # full chunk text into prompt (stored avg ~1335 chars)
-  # on CPU desktop keep context_chunks at 3 to avoid multi-minute TTFT with 6×1400
-  context_chunks: 3
-  chunk_chars: 1400
+  rerank_top_k: 8
+  similarity_threshold: 0.30
+  context_chunks: 6
+  chunk_chars: 800
   query_max_chars: 2048
 
 generation:
   temperature: 0.1
-  # shorter answers keep CPU latency acceptable
-  num_predict: 256
-  # reserved: not read by main.cpp, used by launcher (-c)
-  num_ctx: 8192
+  num_predict: 250
+  num_ctx: 16384
 
 prompt:
   system: |
     Отвечай ТОЛЬКО по фрагментам контекста ниже и только на русском языке.
+    Структурируй ответ кратко: 2–5 предложений по сути вопроса.
     Если в контексте нет ответа — напиши ровно: NOT FOUND in documentation.
-    Не выдумывай факты. В конце ответа кратко укажи источники (файл и страница), если они есть.
+    Не выдумывай факты. В конце укажи источники: файл и страница.
 
   not_found: NOT FOUND in documentation
 
 ui:
-  # host is fixed to 127.0.0.1 in code (not configurable)
   port: 8765
   title: COMPACS RAG
   width: 1024
