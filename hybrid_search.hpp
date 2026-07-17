@@ -213,6 +213,18 @@ inline double section_boost(const std::string &question, const std::string &text
     return 1.0;
 }
 
+inline bool query_has_cyrillic(const std::string &text) {
+    for (std::size_t i = 0; i + 1 < text.size(); ++i) {
+        const auto b0 = static_cast<unsigned char>(text[i]);
+        const auto b1 = static_cast<unsigned char>(text[i + 1]);
+        // Cyrillic UTF-8 letters: U+0400..U+04FF → D0/D1 + trail
+        if ((b0 == 0xD0 || b0 == 0xD1) && (b1 & 0xC0) == 0x80) {
+            return true;
+        }
+    }
+    return false;
+}
+
 inline std::vector<RagHit> hybrid_retrieve(
     const std::vector<RagChunk> &chunks,
     const Bm25Index &bm25,
@@ -225,6 +237,10 @@ inline std::vector<RagHit> hybrid_retrieve(
     }
 
     const auto query_tokens = tokenize_query(question, lemmas);
+    // Russian corpus: Latin-only OOD questions must not leak through BM25 on
+    // leftover English tokens (docs/compacs/color/…). Dense threshold alone
+    // already rejects them; skip BM25 when there is no Cyrillic in the query.
+    const bool allow_bm25 = cfg.enabled && !query_tokens.empty() && query_has_cyrillic(question);
 
     struct Scored {
         std::size_t idx;
@@ -253,7 +269,7 @@ inline std::vector<RagHit> hybrid_retrieve(
                 dense_ranked.emplace_back(row.dense, i);
             }
         }
-        if (cfg.enabled && bm25.size() == chunks.size()) {
+        if (allow_bm25 && bm25.size() == chunks.size()) {
             row.bm25 = bm25.score(i, query_tokens, cfg.bm25_k1, cfg.bm25_b);
             if (row.bm25 > 0.0) {
                 row.from_bm25 = true;

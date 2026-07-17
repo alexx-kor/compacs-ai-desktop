@@ -374,6 +374,8 @@ const char *to_string(ConfigSource source) {
 
 void AppConfig::log_effective(std::ostream &out) const {
     out << "=== COMPACS config (effective) ===\n";
+    out << "  exe_dir = " << exe_dir << "\n";
+    out << "  config_path = " << config_path << "\n";
     out << "  llama_base_url = " << llama_base_url() << " (" << to_string(src_base_url) << ")  # legacy\n";
     out << "  llama_embed_url = " << llama_embed_url() << " (" << to_string(src_embed_port) << ")\n";
     out << "  llama_gen_url = " << llama_gen_url() << " (" << to_string(src_gen_port) << ")\n";
@@ -489,6 +491,8 @@ bool load_app_config(const std::filesystem::path &exe_dir, AppConfig *out, std::
     }
     *out = AppConfig{};
     const auto path = exe_dir / "config.yaml";
+    out->exe_dir = exe_dir.string();
+    out->config_path = path.string();
 
     if (!std::filesystem::exists(path)) {
         std::string write_err;

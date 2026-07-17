@@ -98,6 +98,10 @@ struct AppConfig {
     ConfigSource src_ui_height = ConfigSource::Default;
     ConfigSource src_ui_assets_dir = ConfigSource::Default;
 
+    // Resolved at load (for diagnostics / build_info).
+    std::string config_path;
+    std::string exe_dir;
+
     std::string llama_base_url() const {
         return "http://" + server_host + ":" + std::to_string(server_port);
     }

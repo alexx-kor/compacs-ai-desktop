@@ -166,6 +166,45 @@ inline SOCKET connect_host(const std::string &host, int port, int timeout_sec) {
     return sock;
 }
 
+inline bool header_has_token(const std::string &headers, const char *key, const char *token) {
+    const auto pos = headers.find(key);
+    if (pos == std::string::npos) {
+        return false;
+    }
+    const auto end = headers.find("\r\n", pos);
+    const std::string line = headers.substr(pos, end == std::string::npos ? std::string::npos : end - pos);
+    return line.find(token) != std::string::npos;
+}
+
+// Decode one or more HTTP/1.1 chunked frames from *buf into *out.
+// Returns false if more socket data is needed for an incomplete chunk.
+inline bool decode_chunked_available(std::string *buf, std::string *out) {
+    while (true) {
+        const auto line_end = buf->find("\r\n");
+        if (line_end == std::string::npos) {
+            return false;
+        }
+        std::size_t size = 0;
+        try {
+            size = static_cast<std::size_t>(std::stoul(buf->substr(0, line_end), nullptr, 16));
+        } catch (...) {
+            buf->clear();
+            return true;
+        }
+        const std::size_t data_start = line_end + 2;
+        const std::size_t frame_end = data_start + size + 2;  // payload + trailing CRLF
+        if (buf->size() < frame_end) {
+            return false;
+        }
+        if (size == 0) {
+            buf->erase(0, frame_end);
+            return true;  // end of chunked body
+        }
+        out->append(buf->data() + data_start, size);
+        buf->erase(0, frame_end);
+    }
+}
+
 inline std::optional<Result> http_request(
     const std::string &host,
     int port,
@@ -201,8 +240,10 @@ inline std::optional<Result> http_request(
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(read_timeout_sec);
     std::string raw;
-    char chunk[4096];
-    while (std::chrono::steady_clock::now() < deadline) {
+    char buf[4096];
+
+    // 1) Accumulate until response headers are complete.
+    while (std::chrono::steady_clock::now() < deadline && raw.find("\r\n\r\n") == std::string::npos) {
         fd_set rfds;
         FD_ZERO(&rfds);
         FD_SET(sock, &rfds);
@@ -210,36 +251,107 @@ inline std::optional<Result> http_request(
         if (select(0, &rfds, nullptr, nullptr, &tv) <= 0) {
             continue;
         }
-        const int read = recv(sock, chunk, sizeof(chunk), 0);
-        if (read <= 0) {
-            break;
+        const int n = recv(sock, buf, sizeof(buf), 0);
+        if (n <= 0) {
+            closesocket(sock);
+            return std::nullopt;
         }
-        raw.append(chunk, read);
-        if (raw.find("\r\n\r\n") != std::string::npos) {
-            const auto header_end = raw.find("\r\n\r\n");
-            const std::size_t expected = detail::content_length_from_headers(raw.substr(0, header_end));
-            const std::size_t have_body = raw.size() - header_end - 4;
-            if (expected == 0 || have_body >= expected) {
-                break;
-            }
-        }
-    }
-    closesocket(sock);
-
-    if (raw.empty()) {
-        return std::nullopt;
+        raw.append(buf, n);
     }
 
     const auto header_end = raw.find("\r\n\r\n");
     if (header_end == std::string::npos) {
+        closesocket(sock);
         return std::nullopt;
     }
     const std::string headers = raw.substr(0, header_end);
-    std::string response_body = raw.substr(header_end + 4);
+    std::string pending = raw.substr(header_end + 4);
+    const bool chunked = header_has_token(headers, "Transfer-Encoding:", "chunked");
+    const std::size_t expected = content_length_from_headers(headers);
 
-    if (on_chunk && !response_body.empty()) {
-        on_chunk(response_body.data(), response_body.size());
+    std::string response_body;
+    auto feed = [&](const char *data, std::size_t len) {
+        if (len == 0) {
+            return;
+        }
+        response_body.append(data, len);
+        if (on_chunk) {
+            on_chunk(data, len);
+        }
+    };
+
+    // 2) Body: chunked stream (llama /completion), Content-Length, or read-until-close.
+    if (chunked) {
+        std::string chunk_buf = std::move(pending);
+        bool done = decode_chunked_available(&chunk_buf, &response_body);
+        if (on_chunk && !response_body.empty()) {
+            // Initial decoded payload (may be empty if first TCP segment was headers-only).
+            on_chunk(response_body.data(), response_body.size());
+        }
+        std::string decoded_delta;
+        while (!done && std::chrono::steady_clock::now() < deadline) {
+            fd_set rfds;
+            FD_ZERO(&rfds);
+            FD_SET(sock, &rfds);
+            timeval tv{0, 200000};
+            if (select(0, &rfds, nullptr, nullptr, &tv) <= 0) {
+                continue;
+            }
+            const int n = recv(sock, buf, sizeof(buf), 0);
+            if (n <= 0) {
+                break;
+            }
+            chunk_buf.append(buf, n);
+            decoded_delta.clear();
+            done = decode_chunked_available(&chunk_buf, &decoded_delta);
+            if (!decoded_delta.empty()) {
+                feed(decoded_delta.data(), decoded_delta.size());
+            }
+        }
+        // When on_chunk already received the first decoded block above, avoid double-count
+        // in response_body for the initial part — response_body already holds it.
+    } else if (expected > 0) {
+        if (!pending.empty()) {
+            feed(pending.data(), pending.size());
+        }
+        while (response_body.size() < expected && std::chrono::steady_clock::now() < deadline) {
+            fd_set rfds;
+            FD_ZERO(&rfds);
+            FD_SET(sock, &rfds);
+            timeval tv{0, 200000};
+            if (select(0, &rfds, nullptr, nullptr, &tv) <= 0) {
+                continue;
+            }
+            const int n = recv(sock, buf, sizeof(buf), 0);
+            if (n <= 0) {
+                break;
+            }
+            feed(buf, static_cast<std::size_t>(n));
+        }
+        if (response_body.size() > expected) {
+            response_body.resize(expected);
+        }
+    } else {
+        // No Content-Length: read until peer closes (Connection: close).
+        if (!pending.empty()) {
+            feed(pending.data(), pending.size());
+        }
+        while (std::chrono::steady_clock::now() < deadline) {
+            fd_set rfds;
+            FD_ZERO(&rfds);
+            FD_SET(sock, &rfds);
+            timeval tv{0, 200000};
+            if (select(0, &rfds, nullptr, nullptr, &tv) <= 0) {
+                continue;
+            }
+            const int n = recv(sock, buf, sizeof(buf), 0);
+            if (n <= 0) {
+                break;
+            }
+            feed(buf, static_cast<std::size_t>(n));
+        }
     }
+    closesocket(sock);
 
     Result result;
     const auto status_pos = headers.find(' ');

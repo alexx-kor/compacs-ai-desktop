@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
@@ -195,6 +196,27 @@ std::filesystem::path exe_directory() {
 // Vector store (COMPACS1 binary, 768d float32)
 // ---------------------------------------------------------------------------
 
+// One-point repair: some vectors.bin exports stored the UTF-8 name "Часть"
+// as CP866/box-drawing mojibake (E2 95 A8 …). Canonicalize to readable UTF-8
+// while keeping the " N_OG_1.txt" suffix intact.
+static std::string canonicalize_source_name(std::string source) {
+    const auto og = source.find("_OG_");
+    if (og == std::string::npos) {
+        return source;
+    }
+    // Expect "... N_OG_…" — find the space before the collection number.
+    std::size_t num = og;
+    while (num > 0 && source[num - 1] != ' ') {
+        --num;
+    }
+    if (num == 0 || num >= source.size() || !std::isdigit(static_cast<unsigned char>(source[num]))) {
+        return source;
+    }
+    // "Часть" in UTF-8
+    static const char kChast[] = "\xD0\xA7\xD0\xB0\xD1\x81\xD1\x82\xD1\x8C";
+    return std::string(kChast) + source.substr(num - 1);  // includes leading space
+}
+
 struct ChunkRow {
     std::string id;
     std::string source;
@@ -269,6 +291,7 @@ public:
             row.id = std::to_string(id_num);
             row.page = static_cast<int>(page);
             row.source.assign(reinterpret_cast<const char *>(data + offset), source_len);
+            row.source = canonicalize_source_name(std::move(row.source));
             offset += source_len;
             row.text.assign(reinterpret_cast<const char *>(data + offset), text_len);
             offset += text_len;
@@ -977,7 +1000,8 @@ std::string format_sse(const std::string &event, const std::string &json_data) {
 
 class ApiServer {
 public:
-    explicit ApiServer(RagController *controller) : controller_(controller) {}
+    explicit ApiServer(RagController *controller, std::string build_info = {})
+        : controller_(controller), build_info_(std::move(build_info)) {}
 
     bool start(int port, const std::filesystem::path &assets_dir, std::string *error) {
         port_ = port;
@@ -995,27 +1019,28 @@ public:
         });
 
         server_.Get("/health", [](const httplib::Request &, httplib::Response &res) {
-            res.set_content(R"({"status":"ok"})", "application/json");
+            res.set_content(R"({"status":"ok"})", "application/json; charset=utf-8");
         });
 
         server_.Get("/api/info", [this](const httplib::Request &, httplib::Response &res) {
             if (!controller_) {
                 res.status = 503;
-                res.set_content(R"({"error":"controller not ready"})", "application/json");
+                res.set_content(R"({"error":"controller not ready"})", "application/json; charset=utf-8");
                 return;
             }
             std::string err;
             if (!controller_->ready(&err)) {
                 res.status = 503;
-                res.set_content("{\"error\":\"" + json_escape(err) + "\"}", "application/json");
+                res.set_content("{\"error\":\"" + json_escape(err) + "\"}", "application/json; charset=utf-8");
                 return;
             }
             const std::string body =
                 "{\"chunks\":" + std::to_string(controller_->chunk_count()) +
                 ",\"dim\":" + std::to_string(controller_->embedding_dim()) +
                 ",\"llama_embed\":\"" + json_escape(controller_->llama_config().embed_url) +
-                "\",\"llama_gen\":\"" + json_escape(controller_->llama_config().base_url) + "\"}";
-            res.set_content(body, "application/json");
+                "\",\"llama_gen\":\"" + json_escape(controller_->llama_config().base_url) +
+                "\",\"build_info\":" + (build_info_.empty() ? "{}" : build_info_) + "}";
+            res.set_content(body, "application/json; charset=utf-8");
         });
 
         server_.Post("/api/ask", [this](const httplib::Request &req, httplib::Response &res) {
@@ -1052,8 +1077,9 @@ public:
                 sources << "]";
                 const std::string body =
                     "{\"answer\":\"" + json_escape(result.answer) + "\",\"error\":\"" + json_escape(result.error) +
-                    "\",\"ms\":" + std::to_string(result.ms) + ",\"sources\":" + sources.str() + "}";
-                res.set_content(body, "application/json");
+                    "\",\"ms\":" + std::to_string(result.ms) + ",\"sources\":" + sources.str() +
+                    ",\"build_info\":" + (build_info_.empty() ? "{}" : build_info_) + "}";
+                res.set_content(body, "application/json; charset=utf-8");
                 return;
             }
 
@@ -1082,7 +1108,8 @@ public:
                         const std::string payload =
                             "{\"answer\":\"" + json_escape(result.answer) + "\",\"error\":\"" +
                             json_escape(result.error) + "\",\"ms\":" + std::to_string(result.ms) +
-                            ",\"sources\":" + sources.str() + "}";
+                            ",\"sources\":" + sources.str() +
+                            ",\"build_info\":" + (build_info_.empty() ? "{}" : build_info_) + "}";
                         queue->push(format_sse("done", payload));
                         queue->close();
                         asking_ = false;
@@ -1167,6 +1194,7 @@ private:
     }
 
     RagController *controller_ = nullptr;
+    std::string build_info_;
     httplib::Server server_;
     std::thread thread_;
     std::atomic<bool> asking_{false};
@@ -1327,7 +1355,14 @@ int main(int argc, char *argv[]) {
 
     const int api_port = app_cfg.ui_port;
 
-    ApiServer api(&controller);
+    const std::string build_info =
+        "{\"exe\":\"" + json_escape((exe_dir / "main.exe").string()) +
+        "\",\"config\":\"" + json_escape(app_cfg.config_path) +
+        "\",\"similarity_threshold\":" + std::to_string(app_cfg.similarity_threshold) +
+        ",\"chunk_chars\":" + std::to_string(app_cfg.chunk_chars) +
+        ",\"context_chunks\":" + std::to_string(app_cfg.context_chunks) + "}";
+
+    ApiServer api(&controller, build_info);
     std::string api_error;
     const auto assets_dir = exe_dir / app_cfg.ui_assets_dir;
     if (!api.start(api_port, assets_dir, &api_error)) {
