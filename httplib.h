@@ -376,7 +376,10 @@ private:
             if (client == INVALID_SOCKET) {
                 continue;
             }
-            handle_client(client);
+            // One thread per connection: a slow/long ask must not block /health,
+            // /api/info or a second request (single-threaded serving caused the UI
+            // to appear frozen while a request was in flight).
+            std::thread(&Server::handle_client, this, client).detach();
         }
         closesocket(server);
         listen_socket_ = INVALID_SOCKET;
@@ -384,22 +387,33 @@ private:
     }
 
     void handle_client(SOCKET client) {
-        const std::string headers = detail::read_headers(client);
-        if (headers.empty()) {
+        // read_headers may over-read past "\r\n\r\n" and capture the start (or all)
+        // of the request body. Those bytes must be kept — recv already consumed them
+        // from the socket, so re-reading the body from scratch would block forever
+        // whenever headers and body arrive in one segment (typical on localhost).
+        const std::string raw = detail::read_headers(client);
+        const auto header_end = raw.find("\r\n\r\n");
+        if (raw.empty() || header_end == std::string::npos) {
             closesocket(client);
             return;
         }
+        const std::string headers = raw.substr(0, header_end);
+        std::string body = raw.substr(header_end + 4);
+
         const std::size_t body_len = detail::content_length_from_headers(headers);
-        std::string body(body_len, '\0');
-        std::size_t got = 0;
-        while (got < body_len) {
-            const int read = recv(client, body.data() + got, static_cast<int>(body_len - got), 0);
+        while (body.size() < body_len) {
+            char buf[4096];
+            const std::size_t remaining = body_len - body.size();
+            const std::size_t want = remaining < sizeof(buf) ? remaining : sizeof(buf);
+            const int read = recv(client, buf, static_cast<int>(want), 0);
             if (read <= 0) {
                 break;
             }
-            got += static_cast<std::size_t>(read);
+            body.append(buf, static_cast<std::size_t>(read));
         }
-        body.resize(got);
+        if (body.size() > body_len) {
+            body.resize(body_len);
+        }
 
         Request request = detail::parse_request(headers, body);
         Response response;

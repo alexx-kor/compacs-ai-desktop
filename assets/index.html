@@ -103,6 +103,15 @@ async function refreshInfo() {
   }
 }
 
+// Idle watchdog: if no data/token arrives within this window, abort so the UI
+// shows an error instead of spinning on "Поиск контекста…" forever.
+const ASK_IDLE_TIMEOUT_MS = 180000;
+
+function renderAnswer(answerEl, answer, sources) {
+  const srcText = (sources || []).map(s => "- " + s.source + ", стр. " + s.page).join("\n");
+  answerEl.textContent = (answer || "(пустой ответ)") + (srcText ? "\n\nИсточники:\n" + srcText : "");
+}
+
 $("ask").onclick = async () => {
   const question = $("question").value.trim();
   if (!question) return;
@@ -110,34 +119,81 @@ $("ask").onclick = async () => {
   const btn = $("ask");
   btn.disabled = true;
   answerEl.textContent = "Поиск контекста…";
+
+  const controller = new AbortController();
+  let watchdog = setTimeout(() => controller.abort(), ASK_IDLE_TIMEOUT_MS);
+  const bump = () => {
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => controller.abort(), ASK_IDLE_TIMEOUT_MS);
+  };
+
+  let answer = "";
+  let finished = false;
   try {
     const res = await fetch(API + "/api/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, stream: false }),
+      body: JSON.stringify({ question, stream: true }),
+      signal: controller.signal,
     });
     if (res.status === 429) {
       answerEl.textContent = "Модель занята — дождитесь окончания предыдущего вопроса.";
       return;
     }
-    if (!res.ok) {
+    if (!res.ok || !res.body) {
       let detail = res.statusText;
       try { detail = (await res.json()).error || detail; } catch (_) {}
       answerEl.textContent = "Ошибка: " + detail;
       return;
     }
-    answerEl.textContent = "Генерация ответа…";
-    const data = await res.json();
-    if (data.error) {
-      answerEl.textContent = "Ошибка: " + data.error;
-      return;
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buf = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      bump();
+      buf += decoder.decode(value, { stream: true });
+      let sep;
+      while ((sep = buf.indexOf("\n\n")) !== -1) {
+        const frame = buf.slice(0, sep);
+        buf = buf.slice(sep + 2);
+        let ev = "message";
+        let data = "";
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("event:")) ev = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        }
+        if (!data) continue;
+        let obj;
+        try { obj = JSON.parse(data); } catch (_) { continue; }
+        if (ev === "status") {
+          if (obj.phase === "retrieval") answerEl.textContent = "Поиск контекста…";
+          else if (obj.phase === "generation") answerEl.textContent = "Генерация ответа…";
+        } else if (ev === "token") {
+          answer += obj.text || "";
+          answerEl.textContent = answer || "Генерация ответа…";
+        } else if (ev === "done") {
+          finished = true;
+          if (obj.error) answerEl.textContent = "Ошибка: " + obj.error;
+          else renderAnswer(answerEl, obj.answer || answer, obj.sources);
+        }
+      }
     }
-    const sources = data.sources || [];
-    const srcText = sources.map(s => "- " + s.source + ", стр. " + s.page).join("\n");
-    answerEl.textContent = (data.answer || "") + (srcText ? "\n\nИсточники:\n" + srcText : "");
+    if (!finished) {
+      answerEl.textContent = answer
+        ? answer + "\n\n[поток прерван до завершения]"
+        : "Ошибка: ответ не получен (соединение закрылось преждевременно).";
+    }
   } catch (err) {
-    answerEl.textContent = "Ошибка сети: " + err.message;
+    if (err && err.name === "AbortError") {
+      answerEl.textContent = "Ошибка: превышено время ожидания ответа модели.";
+    } else {
+      answerEl.textContent = "Ошибка сети: " + (err && err.message ? err.message : err);
+    }
   } finally {
+    clearTimeout(watchdog);
     btn.disabled = false;
   }
 };
