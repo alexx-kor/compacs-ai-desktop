@@ -33,11 +33,13 @@ chunks.json
 *.log
 embed_debug.log
 
-# Python (вспомогательные скрипты — кэш)
+# Python (dev-only tools/eval — кэш и venv)
 __pycache__/
 *.py[cod]
 .venv/
 venv/
+tools/eval/.venv/
+tools/eval/venv/
 
 # OS / IDE
 .DS_Store

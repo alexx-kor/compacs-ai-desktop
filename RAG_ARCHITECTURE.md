@@ -130,7 +130,7 @@ sequenceDiagram
 | Панель адреса субъекта | **54%** | Слабый retrieval |
 | **Среднее** | **55%** | См. `qa_evaluation.json` |
 
-Метрика: `retrieval×0.35 + answer×0.65` (скрипт `run_qa_eval.py`).
+Метрика: `retrieval×0.35 + answer×0.65` (dev: `tools/eval/run_qa_eval.py`).
 
 ---
 
@@ -154,7 +154,7 @@ sequenceDiagram
 | `START.cmd` | llama + **консоль** `main.exe --console` (прямой RAG) |
 | `START_UI.cmd` | llama + WebView UI (:8765) |
 | `main.exe -q "вопрос"` | Один вопрос в консоль |
-| `python run_qa_eval.py` | Бенчмарк без UI (только :8081/:8082) |
+| `python tools/eval/run_qa_eval.py` | Golden Set без UI (только :8081/:8082; Python не в runtime) |
 
 ---
 

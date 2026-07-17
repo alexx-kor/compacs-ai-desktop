@@ -1,0 +1,324 @@
+0.00.063.450 I log_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.063.462 I device_info:
+0.00.063.475 I   - CPU     : 12th Gen Intel(R) Core(TM) i7-1255U (16068 MiB, 6536 MiB free)
+0.00.063.526 I system_info: n_threads = 10 (n_threads_batch = 10) / 12 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX_VNNI = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+0.00.063.531 I srv  llama_server: n_parallel is set to auto, using n_parallel = 4 and kv_unified = true
+0.00.063.590 I srv          init: running without SSL
+0.00.063.641 I srv          init: using 11 threads for HTTP server
+0.00.063.948 I srv         start: binding port with default address family
+0.00.072.436 I srv  llama_server: loading model
+0.00.072.594 I srv    load_model: loading model 'C:\projects\compaks-descktop\models\llama3.2-3b-instruct-q4_K_M.gguf'
+0.00.072.617 I common_init_result: fitting params to device memory ...
+0.00.072.617 I common_init_result: (for bugs during this step try to reproduce them with -fit off, or provide --verbose logs if the bug only occurs with -fit on)
+0.00.573.900 I common_params_fit_impl: projected to use 1594 MiB of host memory vs. 16068 MiB of total host memory
+0.02.102.481 W llama_context: n_ctx_seq (8192) < n_ctx_train (131072) -- the full capacity of the model will not be utilized
+0.02.411.613 I common_init_from_params: warming up the model with an empty run - please wait ... (--no-warmup to disable)
+0.02.940.969 I srv    load_model: initializing slots, n_slots = 4
+0.03.392.611 W common_speculative_init: no implementations specified for speculative decoding
+0.03.392.640 I slot   load_model: id  0 | task -1 | new slot, n_ctx = 8192
+0.03.392.644 I slot   load_model: id  1 | task -1 | new slot, n_ctx = 8192
+0.03.392.645 I slot   load_model: id  2 | task -1 | new slot, n_ctx = 8192
+0.03.392.646 I slot   load_model: id  3 | task -1 | new slot, n_ctx = 8192
+0.03.392.780 I srv    load_model: prompt cache is enabled, size limit: 8192 MiB
+0.03.392.781 I srv    load_model: use `--cache-ram 0` to disable the prompt cache
+0.03.392.784 I srv    load_model: for more info see https://github.com/ggml-org/llama.cpp/pull/16391
+0.03.392.784 I srv    load_model: context checkpoints enabled, max = 32, min spacing = 8192
+0.03.392.828 I srv          init: idle slots will be saved to prompt cache and cleared upon starting a new task
+0.03.410.630 I init: chat template, example_format: '<|start_header_id|>system<|end_header_id|>
+
+Cutting Knowledge Date: December 2023
+Today Date: 17 Jul 2026
+
+You are a helpful assistant<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+Hello<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+Hi there<|eot_id|><|start_header_id|>user<|end_header_id|>
+
+How are you?<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+'
+0.03.421.451 I srv          init: init: chat template, thinking = 0
+0.03.421.520 I srv  llama_server: model loaded
+0.03.421.525 I srv  llama_server: server is listening on http://127.0.0.1:8082
+0.03.421.547 I srv  update_slots: all slots are idle
+4.08.530.438 W llm_tokenizer_bpe_session::check_double_bos_eos: Added a BOS token to the prompt as specified by the model but the prompt also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. Are you sure this is what you want?
+4.08.534.405 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = -1
+4.08.534.416 I srv  get_availabl: updating prompt cache
+4.08.534.431 I srv          load:  - looking for better prompt, base f_keep = -1.000, sim = 0.000
+4.08.534.442 I srv        update:  - cache state: 0 prompts, 0.000 MiB (limits: 8192.000 MiB, 8192 tokens, 8589934592 est)
+4.08.534.444 I srv  get_availabl: prompt cache update took 0.03 ms
+4.08.534.477 I slot launch_slot_: id  3 | task 0 | processing task, is_child = 0
+4.08.534.479 I slot process_sing: id  0 | task -1 | saving idle slot to prompt cache
+4.08.534.480 I slot prompt_clear: id  0 | task -1 | clearing prompt with 0 tokens
+4.08.534.497 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+4.08.534.498 I slot prompt_clear: id  1 | task -1 | clearing prompt with 0 tokens
+4.08.534.512 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+4.08.534.512 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+4.26.439.342 I slot print_timing: id  3 | task 0 | prompt eval time =   10715.09 ms /   510 tokens (   21.01 ms per token,    47.60 tokens per second)
+4.26.439.357 I slot print_timing: id  3 | task 0 |        eval time =    7189.83 ms /    70 tokens (  102.71 ms per token,     9.74 tokens per second)
+4.26.439.359 I slot print_timing: id  3 | task 0 |       total time =   17904.93 ms /   580 tokens
+4.26.439.361 I slot print_timing: id  3 | task 0 |    graphs reused =         68
+4.26.439.541 I slot      release: id  3 | task 0 | stop processing: n_tokens = 579, truncated = 0
+4.26.439.560 I srv  update_slots: all slots are idle
+4.26.675.156 W llm_tokenizer_bpe_session::check_double_bos_eos: Added a BOS token to the prompt as specified by the model but the prompt also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. Are you sure this is what you want?
+4.26.675.292 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, sim_best = 0.245 (> 0.100 thold), f_keep = 0.195
+4.26.675.294 I srv  get_availabl: updating prompt cache
+4.26.675.771 W srv   prompt_save:  - saving prompt with length 579, total state size = 63.335 MiB (draft: 0.000 MiB)
+4.26.708.304 I srv          load:  - looking for better prompt, base f_keep = 0.195, sim = 0.245
+4.26.708.324 I srv        update:  - cache state: 1 prompts, 63.335 MiB (limits: 8192.000 MiB, 8192 tokens, 74889 est)
+4.26.708.327 I srv        update:    - prompt 0000018BD45BBF80:     579 tokens, checkpoints:  0,    63.335 MiB
+4.26.708.331 I srv  get_availabl: prompt cache update took 33.03 ms
+4.26.708.545 I slot launch_slot_: id  3 | task 71 | processing task, is_child = 0
+4.26.708.548 I slot process_sing: id  0 | task -1 | saving idle slot to prompt cache
+4.26.708.550 I slot prompt_clear: id  0 | task -1 | clearing prompt with 0 tokens
+4.26.708.569 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+4.26.708.570 I slot prompt_clear: id  1 | task -1 | clearing prompt with 0 tokens
+4.26.708.583 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+4.26.708.584 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+4.36.488.884 I slot print_timing: id  3 | task 71 | prompt eval time =    7849.72 ms /   349 tokens (   22.49 ms per token,    44.46 tokens per second)
+4.36.488.898 I slot print_timing: id  3 | task 71 |        eval time =    1930.76 ms /    20 tokens (   96.54 ms per token,    10.36 tokens per second)
+4.36.488.900 I slot print_timing: id  3 | task 71 |       total time =    9780.48 ms /   369 tokens
+4.36.488.901 I slot print_timing: id  3 | task 71 |    graphs reused =         86
+4.36.489.053 I slot      release: id  3 | task 71 | stop processing: n_tokens = 481, truncated = 0
+4.36.489.072 I srv  update_slots: all slots are idle
+4.36.717.916 W llm_tokenizer_bpe_session::check_double_bos_eos: Added a BOS token to the prompt as specified by the model but the prompt also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. Are you sure this is what you want?
+4.36.718.054 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, sim_best = 0.656 (> 0.100 thold), f_keep = 0.254
+4.36.718.056 I srv  get_availabl: updating prompt cache
+4.36.718.135 W srv   prompt_save:  - saving prompt with length 481, total state size = 52.616 MiB (draft: 0.000 MiB)
+4.36.741.733 I srv          load:  - looking for better prompt, base f_keep = 0.254, sim = 0.656
+4.36.741.814 I srv        update:  - cache state: 2 prompts, 115.951 MiB (limits: 8192.000 MiB, 8192 tokens, 74889 est)
+4.36.741.818 I srv        update:    - prompt 0000018BD45BBF80:     579 tokens, checkpoints:  0,    63.335 MiB
+4.36.741.820 I srv        update:    - prompt 0000018BD45BC400:     481 tokens, checkpoints:  0,    52.616 MiB
+4.36.741.825 I srv  get_availabl: prompt cache update took 23.77 ms
+4.36.742.140 I slot launch_slot_: id  3 | task 92 | processing task, is_child = 0
+4.36.742.143 I slot process_sing: id  0 | task -1 | saving idle slot to prompt cache
+4.36.742.145 I slot prompt_clear: id  0 | task -1 | clearing prompt with 0 tokens
+4.36.742.164 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+4.36.742.165 I slot prompt_clear: id  1 | task -1 | clearing prompt with 0 tokens
+4.36.742.178 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+4.36.742.179 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+4.41.913.070 I slot print_timing: id  3 | task 92 | prompt eval time =    1493.24 ms /    64 tokens (   23.33 ms per token,    42.86 tokens per second)
+4.41.913.087 I slot print_timing: id  3 | task 92 |        eval time =    3677.72 ms /    37 tokens (   99.40 ms per token,    10.06 tokens per second)
+4.41.913.089 I slot print_timing: id  3 | task 92 |       total time =    5170.95 ms /   101 tokens
+4.41.913.091 I slot print_timing: id  3 | task 92 |    graphs reused =        121
+4.41.913.160 I slot      release: id  3 | task 92 | stop processing: n_tokens = 222, truncated = 0
+4.41.913.181 I srv  update_slots: all slots are idle
+4.42.146.301 W llm_tokenizer_bpe_session::check_double_bos_eos: Added a BOS token to the prompt as specified by the model but the prompt also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. Are you sure this is what you want?
+4.42.146.440 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, sim_best = 0.222 (> 0.100 thold), f_keep = 0.509
+4.42.146.645 I slot launch_slot_: id  3 | task 130 | processing task, is_child = 0
+4.42.146.647 I slot process_sing: id  0 | task -1 | saving idle slot to prompt cache
+4.42.146.649 I slot prompt_clear: id  0 | task -1 | clearing prompt with 0 tokens
+4.42.146.667 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+4.42.146.668 I slot prompt_clear: id  1 | task -1 | clearing prompt with 0 tokens
+4.42.146.683 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+4.42.146.683 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+4.55.805.147 I slot print_timing: id  3 | task 130 | prompt eval time =    9069.84 ms /   396 tokens (   22.90 ms per token,    43.66 tokens per second)
+4.55.805.166 I slot print_timing: id  3 | task 130 |        eval time =    4588.89 ms /    42 tokens (  109.26 ms per token,     9.15 tokens per second)
+4.55.805.168 I slot print_timing: id  3 | task 130 |       total time =   13658.73 ms /   438 tokens
+4.55.805.169 I slot print_timing: id  3 | task 130 |    graphs reused =        160
+4.55.805.306 I slot      release: id  3 | task 130 | stop processing: n_tokens = 550, truncated = 0
+4.55.805.327 I srv  update_slots: all slots are idle
+4.56.046.571 W llm_tokenizer_bpe_session::check_double_bos_eos: Added a BOS token to the prompt as specified by the model but the prompt also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. Are you sure this is what you want?
+4.56.046.709 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, sim_best = 0.230 (> 0.100 thold), f_keep = 0.222
+4.56.046.711 I srv  get_availabl: updating prompt cache
+4.56.046.796 W srv   prompt_save:  - saving prompt with length 550, total state size = 60.163 MiB (draft: 0.000 MiB)
+4.56.095.429 I srv          load:  - looking for better prompt, base f_keep = 0.222, sim = 0.230
+4.56.095.452 I srv        update:  - cache state: 3 prompts, 176.114 MiB (limits: 8192.000 MiB, 8192 tokens, 74889 est)
+4.56.095.455 I srv        update:    - prompt 0000018BD45BBF80:     579 tokens, checkpoints:  0,    63.335 MiB
+4.56.095.457 I srv        update:    - prompt 0000018BD45BC400:     481 tokens, checkpoints:  0,    52.616 MiB
+4.56.095.459 I srv        update:    - prompt 0000018BD45BBCB0:     550 tokens, checkpoints:  0,    60.163 MiB
+4.56.095.462 I srv  get_availabl: prompt cache update took 48.75 ms
+4.56.095.667 I slot launch_slot_: id  3 | task 173 | processing task, is_child = 0
+4.56.095.668 I slot process_sing: id  0 | task -1 | saving idle slot to prompt cache
+4.56.095.670 I slot prompt_clear: id  0 | task -1 | clearing prompt with 0 tokens
+4.56.095.689 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+4.56.095.690 I slot prompt_clear: id  1 | task -1 | clearing prompt with 0 tokens
+4.56.095.704 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+4.56.095.704 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+5.08.980.977 I slot print_timing: id  3 | task 173 | prompt eval time =    9386.56 ms /   408 tokens (   23.01 ms per token,    43.47 tokens per second)
+5.08.980.998 I slot print_timing: id  3 | task 173 |        eval time =    3498.96 ms /    35 tokens (   99.97 ms per token,    10.00 tokens per second)
+5.08.981.000 I slot print_timing: id  3 | task 173 |       total time =   12885.52 ms /   443 tokens
+5.08.981.001 I slot print_timing: id  3 | task 173 |    graphs reused =        193
+5.08.981.108 I slot      release: id  3 | task 173 | stop processing: n_tokens = 564, truncated = 0
+5.08.981.127 I srv  update_slots: all slots are idle
+5.09.245.664 W llm_tokenizer_bpe_session::check_double_bos_eos: Added a BOS token to the prompt as specified by the model but the prompt also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. Are you sure this is what you want?
+5.09.245.823 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, sim_best = 0.137 (> 0.100 thold), f_keep = 0.200
+5.09.245.825 I srv  get_availabl: updating prompt cache
+5.09.245.913 W srv   prompt_save:  - saving prompt with length 564, total state size = 61.695 MiB (draft: 0.000 MiB)
+5.09.292.702 I srv          load:  - looking for better prompt, base f_keep = 0.200, sim = 0.137
+5.09.292.728 I srv        update:  - cache state: 4 prompts, 237.809 MiB (limits: 8192.000 MiB, 8192 tokens, 74889 est)
+5.09.292.731 I srv        update:    - prompt 0000018BD45BBF80:     579 tokens, checkpoints:  0,    63.335 MiB
+5.09.292.733 I srv        update:    - prompt 0000018BD45BC400:     481 tokens, checkpoints:  0,    52.616 MiB
+5.09.292.735 I srv        update:    - prompt 0000018BD45BBCB0:     550 tokens, checkpoints:  0,    60.163 MiB
+5.09.292.737 I srv        update:    - prompt 0000018BD4486CC0:     564 tokens, checkpoints:  0,    61.695 MiB
+5.09.292.744 I srv  get_availabl: prompt cache update took 46.91 ms
+5.09.293.068 I slot launch_slot_: id  3 | task 209 | processing task, is_child = 0
+5.09.293.070 I slot process_sing: id  0 | task -1 | saving idle slot to prompt cache
+5.09.293.071 I slot prompt_clear: id  0 | task -1 | clearing prompt with 0 tokens
+5.09.293.091 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+5.09.293.092 I slot prompt_clear: id  1 | task -1 | clearing prompt with 0 tokens
+5.09.293.105 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+5.09.293.106 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+5.26.674.551 I slot print_timing: id  3 | task 209 | prompt eval time =   16880.35 ms /   714 tokens (   23.64 ms per token,    42.30 tokens per second)
+5.26.674.567 I slot print_timing: id  3 | task 209 |        eval time =     501.45 ms /     6 tokens (   83.58 ms per token,    11.97 tokens per second)
+5.26.674.569 I slot print_timing: id  3 | task 209 |       total time =   17381.80 ms /   720 tokens
+5.26.674.570 I slot print_timing: id  3 | task 209 |    graphs reused =        197
+5.26.674.731 I slot      release: id  3 | task 209 | stop processing: n_tokens = 832, truncated = 0
+5.26.674.750 I srv  update_slots: all slots are idle
+12.00.268.174 W llm_tokenizer_bpe_session::check_double_bos_eos: Added a BOS token to the prompt as specified by the model but the prompt also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. Are you sure this is what you want?
+12.00.268.323 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, sim_best = 1.000 (> 0.100 thold), f_keep = 0.994
+12.00.268.613 I slot launch_slot_: id  3 | task 216 | processing task, is_child = 0
+12.00.268.614 I slot process_sing: id  0 | task -1 | saving idle slot to prompt cache
+12.00.268.616 I slot prompt_clear: id  0 | task -1 | clearing prompt with 0 tokens
+12.00.268.638 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+12.00.268.639 I slot prompt_clear: id  1 | task -1 | clearing prompt with 0 tokens
+12.00.268.653 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+12.00.268.654 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+12.00.268.994 W slot   operator(): id  3 | task 216 | need to evaluate at least 1 token for each active slot (n_past = 827, task.n_tokens() = 827)
+12.00.268.998 W slot   operator(): id  3 | task 216 | n_past was set to 826
+12.00.917.495 I slot print_timing: id  3 | task 216 | prompt eval time =     123.73 ms /     1 tokens (  123.73 ms per token,     8.08 tokens per second)
+12.00.917.510 I slot print_timing: id  3 | task 216 |        eval time =     525.08 ms /     6 tokens (   87.51 ms per token,    11.43 tokens per second)
+12.00.917.512 I slot print_timing: id  3 | task 216 |       total time =     648.81 ms /     7 tokens
+12.00.917.513 I slot print_timing: id  3 | task 216 |    graphs reused =        203
+12.00.917.745 I slot      release: id  3 | task 216 | stop processing: n_tokens = 832, truncated = 0
+12.00.917.763 I srv  update_slots: all slots are idle
+12.01.117.158 W llm_tokenizer_bpe_session::check_double_bos_eos: Added a BOS token to the prompt as specified by the model but the prompt also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. Are you sure this is what you want?
+12.01.117.317 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, sim_best = 0.222 (> 0.100 thold), f_keep = 0.136
+12.01.117.319 I srv  get_availabl: updating prompt cache
+12.01.117.431 W srv   prompt_save:  - saving prompt with length 832, total state size = 91.010 MiB (draft: 0.000 MiB)
+12.01.178.939 I srv          load:  - looking for better prompt, base f_keep = 0.136, sim = 0.222
+12.01.179.012 I srv          load:  - found better prompt with f_keep = 0.881, sim = 1.000
+12.01.208.299 I srv        update:  - cache state: 4 prompts, 265.484 MiB (limits: 8192.000 MiB, 8192 tokens, 74889 est)
+12.01.208.319 I srv        update:    - prompt 0000018BD45BC400:     481 tokens, checkpoints:  0,    52.616 MiB
+12.01.208.326 I srv        update:    - prompt 0000018BD45BBCB0:     550 tokens, checkpoints:  0,    60.163 MiB
+12.01.208.327 I srv        update:    - prompt 0000018BD4486CC0:     564 tokens, checkpoints:  0,    61.695 MiB
+12.01.208.329 I srv        update:    - prompt 0000018BD4486690:     832 tokens, checkpoints:  0,    91.010 MiB
+12.01.208.333 I srv  get_availabl: prompt cache update took 91.01 ms
+12.01.208.698 I slot launch_slot_: id  3 | task 223 | processing task, is_child = 0
+12.01.208.701 I slot process_sing: id  0 | task -1 | saving idle slot to prompt cache
+12.01.208.703 I slot prompt_clear: id  0 | task -1 | clearing prompt with 0 tokens
+12.01.208.725 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+12.01.208.792 I slot prompt_clear: id  1 | task -1 | clearing prompt with 0 tokens
+12.01.208.811 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+12.01.208.812 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+12.01.208.866 W slot   operator(): id  3 | task 223 | need to evaluate at least 1 token for each active slot (n_past = 510, task.n_tokens() = 510)
+12.01.208.868 W slot   operator(): id  3 | task 223 | n_past was set to 509
+12.08.287.168 I slot print_timing: id  3 | task 223 | prompt eval time =     129.49 ms /     1 tokens (  129.49 ms per token,     7.72 tokens per second)
+12.08.287.188 I slot print_timing: id  3 | task 223 |        eval time =    6948.96 ms /    70 tokens (   99.27 ms per token,    10.07 tokens per second)
+12.08.287.190 I slot print_timing: id  3 | task 223 |       total time =    7078.45 ms /    71 tokens
+12.08.287.192 I slot print_timing: id  3 | task 223 |    graphs reused =        271
+12.08.287.361 I slot      release: id  3 | task 223 | stop processing: n_tokens = 579, truncated = 0
+12.08.287.386 I srv  update_slots: all slots are idle
+14.15.283.590 W llm_tokenizer_bpe_session::check_double_bos_eos: Added a BOS token to the prompt as specified by the model but the prompt also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. Are you sure this is what you want?
+14.15.283.758 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, sim_best = 1.000 (> 0.100 thold), f_keep = 0.881
+14.15.283.941 I slot launch_slot_: id  3 | task 294 | processing task, is_child = 0
+14.15.283.943 I slot process_sing: id  0 | task -1 | saving idle slot to prompt cache
+14.15.283.945 I slot prompt_clear: id  0 | task -1 | clearing prompt with 0 tokens
+14.15.283.965 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+14.15.283.965 I slot prompt_clear: id  1 | task -1 | clearing prompt with 0 tokens
+14.15.284.042 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+14.15.284.044 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+14.15.284.098 W slot   operator(): id  3 | task 294 | need to evaluate at least 1 token for each active slot (n_past = 510, task.n_tokens() = 510)
+14.15.284.099 W slot   operator(): id  3 | task 294 | n_past was set to 509
+14.21.996.308 I slot print_timing: id  3 | task 294 | prompt eval time =     117.31 ms /     1 tokens (  117.31 ms per token,     8.52 tokens per second)
+14.21.996.325 I slot print_timing: id  3 | task 294 |        eval time =    6595.01 ms /    70 tokens (   94.21 ms per token,    10.61 tokens per second)
+14.21.996.326 I slot print_timing: id  3 | task 294 |       total time =    6712.33 ms /    71 tokens
+14.21.996.328 I slot print_timing: id  3 | task 294 |    graphs reused =        339
+14.21.996.462 I slot      release: id  3 | task 294 | stop processing: n_tokens = 579, truncated = 0
+14.21.996.479 I srv  update_slots: all slots are idle
+14.22.213.125 W llm_tokenizer_bpe_session::check_double_bos_eos: Added a BOS token to the prompt as specified by the model but the prompt also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. Are you sure this is what you want?
+14.22.213.271 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, sim_best = 0.245 (> 0.100 thold), f_keep = 0.195
+14.22.213.272 I srv  get_availabl: updating prompt cache
+14.22.213.359 W srv   prompt_save:  - saving prompt with length 579, total state size = 63.335 MiB (draft: 0.000 MiB)
+14.22.244.692 I srv          load:  - looking for better prompt, base f_keep = 0.195, sim = 0.245
+14.22.244.713 I srv          load:  - found better prompt with f_keep = 0.960, sim = 1.000
+14.22.262.782 I srv        update:  - cache state: 4 prompts, 276.203 MiB (limits: 8192.000 MiB, 8192 tokens, 74889 est)
+14.22.262.795 I srv        update:    - prompt 0000018BD45BBCB0:     550 tokens, checkpoints:  0,    60.163 MiB
+14.22.262.797 I srv        update:    - prompt 0000018BD4486CC0:     564 tokens, checkpoints:  0,    61.695 MiB
+14.22.262.799 I srv        update:    - prompt 0000018BD4486690:     832 tokens, checkpoints:  0,    91.010 MiB
+14.22.262.800 I srv        update:    - prompt 0000018BD44871D0:     579 tokens, checkpoints:  0,    63.335 MiB
+14.22.262.807 I srv  get_availabl: prompt cache update took 49.53 ms
+14.22.262.985 I slot launch_slot_: id  3 | task 365 | processing task, is_child = 0
+14.22.262.987 I slot process_sing: id  0 | task -1 | saving idle slot to prompt cache
+14.22.262.989 I slot prompt_clear: id  0 | task -1 | clearing prompt with 0 tokens
+14.22.263.005 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+14.22.263.006 I slot prompt_clear: id  1 | task -1 | clearing prompt with 0 tokens
+14.22.263.019 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+14.22.263.020 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+14.22.263.095 W slot   operator(): id  3 | task 365 | need to evaluate at least 1 token for each active slot (n_past = 462, task.n_tokens() = 462)
+14.22.263.109 W slot   operator(): id  3 | task 365 | n_past was set to 461
+14.24.191.821 I slot print_timing: id  3 | task 365 | prompt eval time =     111.95 ms /     1 tokens (  111.95 ms per token,     8.93 tokens per second)
+14.24.191.832 I slot print_timing: id  3 | task 365 |        eval time =    1816.76 ms /    21 tokens (   86.51 ms per token,    11.56 tokens per second)
+14.24.191.834 I slot print_timing: id  3 | task 365 |       total time =    1928.71 ms /    22 tokens
+14.24.191.836 I slot print_timing: id  3 | task 365 |    graphs reused =        359
+14.24.192.001 I slot      release: id  3 | task 365 | stop processing: n_tokens = 482, truncated = 0
+14.24.192.020 I srv  update_slots: all slots are idle
+14.24.394.340 W llm_tokenizer_bpe_session::check_double_bos_eos: Added a BOS token to the prompt as specified by the model but the prompt also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. Are you sure this is what you want?
+14.24.394.466 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, sim_best = 0.656 (> 0.100 thold), f_keep = 0.253
+14.24.394.467 I srv  get_availabl: updating prompt cache
+14.24.394.545 W srv   prompt_save:  - saving prompt with length 482, total state size = 52.725 MiB (draft: 0.000 MiB)
+14.24.417.077 I srv          load:  - looking for better prompt, base f_keep = 0.253, sim = 0.656
+14.24.417.118 I srv        update:  - cache state: 5 prompts, 328.928 MiB (limits: 8192.000 MiB, 8192 tokens, 74889 est)
+14.24.417.122 I srv        update:    - prompt 0000018BD45BBCB0:     550 tokens, checkpoints:  0,    60.163 MiB
+14.24.417.123 I srv        update:    - prompt 0000018BD4486CC0:     564 tokens, checkpoints:  0,    61.695 MiB
+14.24.417.125 I srv        update:    - prompt 0000018BD4486690:     832 tokens, checkpoints:  0,    91.010 MiB
+14.24.417.126 I srv        update:    - prompt 0000018BD44871D0:     579 tokens, checkpoints:  0,    63.335 MiB
+14.24.417.128 I srv        update:    - prompt 0000018BD44864E0:     482 tokens, checkpoints:  0,    52.725 MiB
+14.24.417.131 I srv  get_availabl: prompt cache update took 22.66 ms
+14.24.417.353 I slot launch_slot_: id  3 | task 387 | processing task, is_child = 0
+14.24.417.355 I slot process_sing: id  0 | task -1 | saving idle slot to prompt cache
+14.24.417.356 I slot prompt_clear: id  0 | task -1 | clearing prompt with 0 tokens
+14.24.417.371 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+14.24.417.372 I slot prompt_clear: id  1 | task -1 | clearing prompt with 0 tokens
+14.24.417.381 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+14.24.417.382 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+14.29.323.004 I slot print_timing: id  3 | task 387 | prompt eval time =    1336.62 ms /    64 tokens (   20.88 ms per token,    47.88 tokens per second)
+14.29.323.021 I slot print_timing: id  3 | task 387 |        eval time =    3569.04 ms /    38 tokens (   93.92 ms per token,    10.65 tokens per second)
+14.29.323.023 I slot print_timing: id  3 | task 387 |       total time =    4905.66 ms /   102 tokens
+14.29.323.024 I slot print_timing: id  3 | task 387 |    graphs reused =        395
+14.29.323.092 I slot      release: id  3 | task 387 | stop processing: n_tokens = 223, truncated = 0
+14.29.323.110 I srv  update_slots: all slots are idle
+14.29.543.373 W llm_tokenizer_bpe_session::check_double_bos_eos: Added a BOS token to the prompt as specified by the model but the prompt also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. Are you sure this is what you want?
+14.29.543.524 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, sim_best = 0.222 (> 0.100 thold), f_keep = 0.507
+14.29.543.738 I slot launch_slot_: id  3 | task 426 | processing task, is_child = 0
+14.29.543.740 I slot process_sing: id  0 | task -1 | saving idle slot to prompt cache
+14.29.543.743 I slot prompt_clear: id  0 | task -1 | clearing prompt with 0 tokens
+14.29.543.798 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+14.29.543.802 I slot prompt_clear: id  1 | task -1 | clearing prompt with 0 tokens
+14.29.543.817 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+14.29.543.818 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+14.42.107.535 I slot print_timing: id  3 | task 426 | prompt eval time =    8713.60 ms /   396 tokens (   22.00 ms per token,    45.45 tokens per second)
+14.42.107.552 I slot print_timing: id  3 | task 426 |        eval time =    3850.28 ms /    41 tokens (   93.91 ms per token,    10.65 tokens per second)
+14.42.107.554 I slot print_timing: id  3 | task 426 |       total time =   12563.88 ms /   437 tokens
+14.42.107.560 I slot print_timing: id  3 | task 426 |    graphs reused =        433
+14.42.107.690 I slot      release: id  3 | task 426 | stop processing: n_tokens = 549, truncated = 0
+14.42.107.715 I srv  update_slots: all slots are idle
+14.42.334.159 W llm_tokenizer_bpe_session::check_double_bos_eos: Added a BOS token to the prompt as specified by the model but the prompt also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. Are you sure this is what you want?
+14.42.334.297 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, sim_best = 0.230 (> 0.100 thold), f_keep = 0.222
+14.42.334.298 I srv  get_availabl: updating prompt cache
+14.42.334.381 W srv   prompt_save:  - saving prompt with length 549, total state size = 60.054 MiB (draft: 0.000 MiB)
+14.42.361.136 I srv          load:  - looking for better prompt, base f_keep = 0.222, sim = 0.230
+14.42.361.155 I srv          load:  - found better prompt with f_keep = 0.940, sim = 1.000
+14.42.386.269 I srv        update:  - cache state: 5 prompts, 327.288 MiB (limits: 8192.000 MiB, 8192 tokens, 74889 est)
+14.42.386.283 I srv        update:    - prompt 0000018BD45BBCB0:     550 tokens, checkpoints:  0,    60.163 MiB
+14.42.386.285 I srv        update:    - prompt 0000018BD4486690:     832 tokens, checkpoints:  0,    91.010 MiB
+14.42.386.286 I srv        update:    - prompt 0000018BD44871D0:     579 tokens, checkpoints:  0,    63.335 MiB
+14.42.386.288 I srv        update:    - prompt 0000018BD44864E0:     482 tokens, checkpoints:  0,    52.725 MiB
+14.42.386.330 I srv        update:    - prompt 0000018BD4487AD0:     549 tokens, checkpoints:  0,    60.054 MiB
+14.42.386.356 I srv  get_availabl: prompt cache update took 52.04 ms
+14.42.386.548 I slot launch_slot_: id  3 | task 468 | processing task, is_child = 0
+14.42.386.551 I slot process_sing: id  0 | task -1 | saving idle slot to prompt cache
+14.42.386.570 I slot prompt_clear: id  0 | task -1 | clearing prompt with 0 tokens
+14.42.386.589 I slot process_sing: id  1 | task -1 | saving idle slot to prompt cache
+14.42.386.590 I slot prompt_clear: id  1 | task -1 | clearing prompt with 0 tokens
+14.42.386.603 I slot process_sing: id  2 | task -1 | saving idle slot to prompt cache
+14.42.386.604 I slot prompt_clear: id  2 | task -1 | clearing prompt with 0 tokens
+14.42.386.646 W slot   operator(): id  3 | task 468 | need to evaluate at least 1 token for each active slot (n_past = 530, task.n_tokens() = 530)
+14.42.386.647 W slot   operator(): id  3 | task 468 | n_past was set to 529
+14.45.906.276 I slot print_timing: id  3 | task 468 | prompt eval time =     127.99 ms /     1 tokens (  127.99 ms per token,     7.81 tokens per second)
+14.45.906.296 I slot print_timing: id  3 | task 468 |        eval time =    3391.68 ms /    35 tokens (   96.91 ms per token,    10.32 tokens per second)
+14.45.906.298 I slot print_timing: id  3 | task 468 |       total time =    3519.67 ms /    36 tokens
+14.45.906.299 I slot print_timing: id  3 | task 468 |    graphs reused =        468
+14.45.906.400 I slot      release: id  3 | task 468 | stop processing: n_tokens = 564, truncated = 0
+14.45.906.415 I srv  update_slots: all slots are idle

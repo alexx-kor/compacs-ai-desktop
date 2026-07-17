@@ -12,8 +12,10 @@ endif()
 
 set(SOURCES main.cpp config.cpp)
 
-# Optional: embed vectors.bin at compile time (place vectors.bin next to CMakeLists.txt).
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vectors.bin")
+# Optional: embed vectors.bin at compile time (OFF by default — large file stalls configure).
+# Enable: cmake -DCOMPACS_EMBED_VECTORS=ON ...
+option(COMPACS_EMBED_VECTORS "Embed vectors.bin into main.exe" OFF)
+if(COMPACS_EMBED_VECTORS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vectors.bin")
   set(VECTORS_EMBED "${CMAKE_CURRENT_BINARY_DIR}/vectors_embedded.cpp")
   file(READ "${CMAKE_CURRENT_SOURCE_DIR}/vectors.bin" _vectors_hex HEX)
   string(LENGTH "${_vectors_hex}" _hex_len)
@@ -43,7 +45,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vectors.bin")
   add_compile_definitions(COMPACS_EMBEDDED_VECTORS=1)
   message(STATUS "Embedding vectors.bin (${_byte_count} bytes) into main.exe")
 else()
-  message(STATUS "vectors.bin not found — exe will load vectors.bin from its directory at runtime")
+  message(STATUS "vectors.bin loaded at runtime from exe directory (COMPACS_EMBED_VECTORS=${COMPACS_EMBED_VECTORS})")
 endif()
 
 add_executable(main ${SOURCES})
@@ -93,8 +95,8 @@ if(WIN32)
   )
 endif()
 
-# Copy UI assets and runtime files next to the executable.
-add_custom_command(TARGET main POST_BUILD
+# Copy UI assets and runtime files next to the executable (START.cmd uses this dir).
+set(_post_build_cmds
   COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:main>/assets"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/index.html"
@@ -106,6 +108,14 @@ add_custom_command(TARGET main POST_BUILD
     "${CMAKE_CURRENT_SOURCE_DIR}/lemma_map.tsv"
     "$<TARGET_FILE_DIR:main>/lemma_map.tsv"
 )
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vectors.bin")
+  list(APPEND _post_build_cmds
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_CURRENT_SOURCE_DIR}/vectors.bin"
+      "$<TARGET_FILE_DIR:main>/vectors.bin"
+  )
+endif()
+add_custom_command(TARGET main POST_BUILD ${_post_build_cmds})
 
 install(TARGETS main RUNTIME DESTINATION bin)
 install(FILES assets/index.html DESTINATION bin/assets)

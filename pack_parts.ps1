@@ -50,7 +50,7 @@ Copy-Item (Join-Path $Root "START.cmd") $Part1 -Force
 Copy-Item (Join-Path $Root "START_UI.cmd") $Part1 -Force
 Copy-Item (Join-Path $Root "RUN.cmd") $Part1 -Force
 
-foreach ($extra in @("lemma_map.tsv", "RAG_ARCHITECTURE.md", "qa_evaluation.json", "qa_evaluation.csv")) {
+foreach ($extra in @("lemma_map.tsv", "RAG_ARCHITECTURE.md")) {
     $src = Join-Path $Release $extra
     if (-not (Test-Path $src)) { $src = Join-Path $Root $extra }
     if (Test-Path $src) {
@@ -59,6 +59,7 @@ foreach ($extra in @("lemma_map.tsv", "RAG_ARCHITECTURE.md", "qa_evaluation.json
         Write-Host "  (skip missing $extra)"
     }
 }
+# qa_evaluation.* and tools/eval/*.py stay in repo only (dev Golden Set; not shipped).
 
 New-Item -ItemType Directory -Path (Join-Path $Part1 "models") -Force | Out-Null
 @"

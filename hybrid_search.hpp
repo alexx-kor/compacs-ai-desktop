@@ -6,8 +6,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
+#include <fstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace compacs::rag {
@@ -26,6 +29,13 @@ struct RagHit {
     int page = 0;
     std::string text;
     double score = 0.0;
+    // Debug diagnostics (does not affect ranking).
+    double dense_dist = 1.0;
+    double dense_sim = 0.0;
+    double bm25_score = 0.0;
+    bool from_dense = false;
+    bool from_bm25 = false;
+    std::vector<std::string> bm25_matched;
 };
 
 struct HybridConfig {
@@ -65,6 +75,28 @@ inline std::vector<std::string> tokenize(const std::string &text, const LemmaMap
         }
     }
     flush();
+    return tokens;
+}
+
+inline bool is_stopword(const std::string &tok) {
+    static const std::unordered_set<std::string> kStops = {
+        // EN
+        "what", "is", "the", "of", "a", "an", "how", "where", "when", "who", "why", "to", "in", "on",
+        "for", "and", "or", "with", "from", "as", "at", "by", "be", "are", "was", "were", "do", "does",
+        "did", "can", "could", "would", "should", "this", "that", "these", "those", "it", "its",
+        // RU
+        "что", "как", "такое", "это", "где", "в", "на", "по", "для", "и", "или", "какой", "какая",
+        "какие", "какую", "сегодня", "ли", "же", "из", "к", "со", "об", "от", "до", "при", "без",
+        "есть", "был", "была", "были", "быть", "не", "да", "нет",
+    };
+    return kStops.find(tok) != kStops.end();
+}
+
+inline std::vector<std::string> tokenize_query(const std::string &text, const LemmaMap *lemmas) {
+    auto tokens = tokenize(text, lemmas);
+    tokens.erase(std::remove_if(tokens.begin(), tokens.end(),
+                                [](const std::string &t) { return is_stopword(t); }),
+                 tokens.end());
     return tokens;
 }
 
@@ -135,6 +167,21 @@ public:
         return total;
     }
 
+    std::vector<std::string> matched_terms(std::size_t doc_idx,
+                                           const std::vector<std::string> &query_tokens) const {
+        std::vector<std::string> matched;
+        if (doc_idx >= docs_.size()) {
+            return matched;
+        }
+        const auto &doc = docs_[doc_idx];
+        for (const auto &term : query_tokens) {
+            if (doc.term_freq.find(term) != doc.term_freq.end()) {
+                matched.push_back(term);
+            }
+        }
+        return matched;
+    }
+
     std::size_t size() const { return docs_.size(); }
 
 private:
@@ -177,14 +224,17 @@ inline std::vector<RagHit> hybrid_retrieve(
         return {};
     }
 
-    const auto query_tokens = tokenize(question, lemmas);
+    const auto query_tokens = tokenize_query(question, lemmas);
 
     struct Scored {
         std::size_t idx;
         double dense = 0.0;
+        double dense_dist = 1.0;
         double bm25 = 0.0;
         double rrf = 0.0;
         double final = 0.0;
+        bool from_dense = false;
+        bool from_bm25 = false;
     };
     std::vector<Scored> pool;
     pool.reserve(chunks.size());
@@ -194,17 +244,19 @@ inline std::vector<RagHit> hybrid_retrieve(
 
     for (std::size_t i = 0; i < chunks.size(); ++i) {
         const auto &chunk = chunks[i];
-        Scored row{i, 0.0, 0.0, 0.0, 0.0};
+        Scored row{i, 0.0, 1.0, 0.0, 0.0, 0.0, false, false};
         if (chunk.embedding && query_embedding.size() == chunk.embedding->size()) {
-            const double dist = cosine_distance(query_embedding, *chunk.embedding);
-            if (dist < cfg.similarity_threshold) {
-                row.dense = 1.0 - dist;
+            row.dense_dist = cosine_distance(query_embedding, *chunk.embedding);
+            if (row.dense_dist < cfg.similarity_threshold) {
+                row.dense = 1.0 - row.dense_dist;
+                row.from_dense = true;
                 dense_ranked.emplace_back(row.dense, i);
             }
         }
         if (cfg.enabled && bm25.size() == chunks.size()) {
             row.bm25 = bm25.score(i, query_tokens, cfg.bm25_k1, cfg.bm25_b);
             if (row.bm25 > 0.0) {
+                row.from_bm25 = true;
                 bm25_ranked.emplace_back(row.bm25, i);
             }
         }
@@ -258,8 +310,52 @@ inline std::vector<RagHit> hybrid_retrieve(
             continue;
         }
         const auto &chunk = chunks[pool[i].idx];
-        hits.push_back(RagHit{chunk.id, chunk.source, chunk.page, chunk.text, pool[i].final});
+        RagHit hit;
+        hit.id = chunk.id;
+        hit.source = chunk.source;
+        hit.page = chunk.page;
+        hit.text = chunk.text;
+        hit.score = pool[i].final;
+        hit.dense_dist = pool[i].dense_dist;
+        hit.dense_sim = pool[i].dense;
+        hit.bm25_score = pool[i].bm25;
+        hit.from_dense = pool[i].from_dense;
+        hit.from_bm25 = pool[i].from_bm25;
+        hit.bm25_matched = bm25.matched_terms(pool[i].idx, query_tokens);
+        hits.push_back(std::move(hit));
     }
+
+    if (const char *dbg = std::getenv("COMPACS_DEBUG_RETRIEVAL"); dbg && dbg[0] == '1') {
+        std::ofstream log("rag_branch.log", std::ios::app);
+        if (log) {
+            log << "=== q: " << question << " ===\n";
+            log << "query_tokens:";
+            for (const auto &tok : query_tokens) {
+                log << " [" << tok << "]";
+            }
+            log << "\n";
+            log << "dense_pool=" << dense_ranked.size() << " bm25_pool=" << bm25_ranked.size() << "\n";
+            for (const auto &hit : hits) {
+                const char *branch = (hit.from_dense && hit.from_bm25) ? "both"
+                                     : hit.from_dense                 ? "dense"
+                                     : hit.from_bm25                  ? "bm25"
+                                                                      : "none";
+                log << "hit branch=" << branch << " dense_dist=" << hit.dense_dist
+                    << " dense_sim=" << hit.dense_sim << " bm25=" << hit.bm25_score
+                    << " final=" << hit.score << " page=" << hit.page << " source=" << hit.source
+                    << " matched=";
+                for (std::size_t t = 0; t < hit.bm25_matched.size(); ++t) {
+                    if (t) {
+                        log << ",";
+                    }
+                    log << hit.bm25_matched[t];
+                }
+                log << "\n";
+            }
+            log << "\n";
+        }
+    }
+
     return hits;
 }
 

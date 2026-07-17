@@ -1,39 +1,37 @@
 COMPACS RAG Desktop — быстрый старт
 ====================================
 
-1. Распакуйте архив в любую папку (например D:\COMPACS-RAG).
-2. Дважды щёлкните START.cmd (или сразу main.exe).
-3. Откроется окно COMPACS RAG — задайте вопрос там. Браузер не нужен.
+1. Распакуйте Part1–Part3 по ASSEMBLE.md в одну папку.
+2. Дважды щёлкните START.cmd (консоль) или START_UI.cmd (окно).
+3. Задайте вопрос. Браузер для консольного режима не нужен.
 
 Все пути относительные. Python, Docker, Ollama и внешние API не требуются.
-main.exe сам поднимает модели и читает векторную базу rag/.
+START.cmd поднимает llama-server (:8081 embed, :8082 chat) и запускает main.exe.
 
-Что лежит в папке (проверено при сборке архива):
+Что лежит в папке после сборки комплекта:
   main.exe
-  llama-server.exe
-  rag\vectors.bin
-  rag\chunks.bin
-  rag\texts.txt
-  rag\meta.json
-  assets\index.html
+  config.yaml
+  vectors.bin
+  lemma_map.tsv
+  llama\llama-server.exe (+ DLL)
   models\nomic-embed-text.gguf
   models\llama3.2-3b-instruct-q4_K_M.gguf
-  START.cmd / STOP.cmd
-  COMPACS-RAG-Desktop-Документация.docx  (полная инструкция в Word)
+  assets\index.html
+  START.cmd / START_UI.cmd / STOP.cmd
+  RAG_ARCHITECTURE.md
 
 Порты:
-  13081 — чат (UI + API main.exe)
+  8765  — UI/API (только START_UI)
   8081  — эмбеддинги (llama-server)
   8082  — генерация ответа (llama-server)
-
-Совместимость со стендом: engine стенда :8080, embed десктопа :8081 — конфликта нет.
 
 Остановка: STOP.cmd
 
 Требования:
   Windows 10/11 x64
-  WebView2 Runtime (обычно уже есть с Edge)
+  WebView2 Runtime (обычно уже есть с Edge; только для START_UI)
   ~2.5 GB свободного места
 
-Пересборка архива на стенде:
-  python D:\compacs-desktop\pack_portable.py
+Пересборка архивов из исходников (на машине разработчика):
+  build.bat
+  powershell -ExecutionPolicy Bypass -File .\pack_parts.ps1

@@ -32,9 +32,9 @@ retrieval:
   # retrieve pool → rerank → context_chunks
   top_k: 12
   rerank_top_k: 8
-  similarity_threshold: 0.30
-  context_chunks: 6
-  chunk_chars: 800
+  similarity_threshold: 0.206
+  context_chunks: 3
+  chunk_chars: 1000
   query_max_chars: 2048
   map_reduce_max_chunks: 6
   map_chunk_chars: 400
@@ -42,8 +42,8 @@ retrieval:
 
 generation:
   temperature: 0.1
-  num_predict: 250
-  num_ctx: 16384
+  num_predict: 200
+  num_ctx: 8192
 
 prompt:
   system: |

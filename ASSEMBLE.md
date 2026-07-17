@@ -8,7 +8,7 @@
 | **2** | `COMPACS-Desktop-Part2-ChatModel.zip` | llama3.2-3b-instruct-q4_K_M.gguf (~2 GB) |
 | **3** | `COMPACS-Desktop-Part3-EmbedModel.zip` | nomic-embed-text.gguf (~260 MB) |
 
-Документация: **RAG_ARCHITECTURE.md** (архитектура RAG), **qa_evaluation.json** (качество ~55%).
+Документация: **RAG_ARCHITECTURE.md** (архитектура RAG). Golden Set / eval — только в репозитории (`tools/eval/`), в архив не входит.
 
 ---
 
@@ -29,7 +29,6 @@ D:\COMPACS-Desktop\
   START.cmd          ← консольный режим (рекомендуется)
   START_UI.cmd       ← окно WebView (опционально)
   RAG_ARCHITECTURE.md
-  qa_evaluation.json
   models\            (пусто)
 ```
 

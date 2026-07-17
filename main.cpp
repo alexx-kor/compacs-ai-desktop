@@ -718,6 +718,27 @@ std::string llama3_wrap(const std::string &role, const std::string &content) {
            llama3_token("eot_id");
 }
 
+// Обрезает строку до max_bytes, не разрывая UTF-8 codepoint.
+static std::string clip_utf8(const std::string &s, std::size_t max_bytes) {
+    if (s.size() <= max_bytes) {
+        return s;
+    }
+    std::size_t cut = max_bytes;
+    while (cut > 0 && (static_cast<unsigned char>(s[cut]) & 0xC0) == 0x80) {
+        --cut;
+    }
+    // Prefer breaking at whitespace within the last 80 bytes.
+    const std::size_t floor = cut > 80 ? cut - 80 : 0;
+    for (std::size_t i = cut; i > floor; --i) {
+        const unsigned char ch = static_cast<unsigned char>(s[i - 1]);
+        if (ch == ' ' || ch == '\n' || ch == '\t' || ch == '\r') {
+            cut = i - 1;
+            break;
+        }
+    }
+    return s.substr(0, cut);
+}
+
 std::string build_rag_prompt(
     const std::string &question,
     const std::vector<ChunkHit> &hits,
@@ -725,10 +746,7 @@ std::string build_rag_prompt(
     const std::string &system_prefix) {
     std::string context = system_prefix;
     for (const auto &hit : hits) {
-        std::string clipped = hit.text;
-        if (clipped.size() > chunk_char_limit) {
-            clipped.resize(chunk_char_limit);
-        }
+        const std::string clipped = clip_utf8(hit.text, chunk_char_limit);
         if (context.size() > system_prefix.size()) {
             context += "\n\n";
         }
